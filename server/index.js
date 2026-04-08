@@ -22,10 +22,14 @@ if (existsSync(publicDir)) {
   app.use(express.static(publicDir));
 }
 
-// API routes — will be mounted in Task 3
-// app.use('/api/designs', designsRouter);
-// app.use('/api/models', modelsRouter);
-// app.use('/api/upload', uploadRouter);
+// API routes
+import designsRouter from './routes/designs.js';
+import modelsRouter from './routes/models.js';
+import uploadRouter from './routes/upload.js';
+
+app.use('/api/designs', designsRouter);
+app.use('/api/models', modelsRouter);
+app.use('/api/upload', uploadRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
