@@ -1,1 +1,8 @@
+node_modules/
+dist/
+server/public/
+server/data/
+server/uploads/
 .superpowers/
+*.db
+.env
