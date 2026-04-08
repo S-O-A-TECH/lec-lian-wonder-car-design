@@ -6,3 +6,4 @@ server/uploads/
 .superpowers/
 *.db
 .env
+.playwright-mcp/
