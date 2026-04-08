@@ -1,0 +1,68 @@
+.toolbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+  z-index: 10;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 6px;
+}
+
+.tool-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.tool-btn:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.tool-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.tool-btn.accent {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.tool-btn.outline {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+}
+
+.tool-btn.outline:hover:not(:disabled) {
+  background: var(--accent);
+  color: #000;
+}
+
+@media (max-width: 767px) {
+  .toolbar {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .tool-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+}

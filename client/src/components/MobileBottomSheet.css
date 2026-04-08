@@ -1,0 +1,75 @@
+.mobile-sheet-container {
+  display: none;
+  position: fixed;
+  bottom: 60px;
+  left: 0;
+  right: 0;
+  z-index: 20;
+}
+
+@media (max-width: 1023px) {
+  .mobile-sheet-container {
+    display: block;
+  }
+
+  /* Override desktop-only hiding when inside bottom sheet */
+  .mobile-sheet-container .brand-panel,
+  .mobile-sheet-container .parts-panel {
+    display: block !important;
+    width: 100% !important;
+    border: none !important;
+    max-height: 40vh;
+  }
+}
+
+.sheet-handle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+}
+
+.handle-bar {
+  width: 40px;
+  height: 4px;
+  background: var(--border-hover);
+  border-radius: 2px;
+}
+
+.sheet-content {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.sheet-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.sheet-tab {
+  flex: 1;
+  padding: 10px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+}
+
+.sheet-tab.active {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}

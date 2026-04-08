@@ -83,8 +83,12 @@ export default function CarModel({ modelPath }) {
       setGlbAvailable(false);
       return;
     }
+    // Check content-type because Vite SPA fallback returns HTML with 200
     fetch(modelPath, { method: 'HEAD' })
-      .then((res) => setGlbAvailable(res.ok))
+      .then((res) => {
+        const ct = res.headers.get('content-type') || '';
+        setGlbAvailable(res.ok && !ct.includes('text/html'));
+      })
       .catch(() => setGlbAvailable(false));
   }, [modelPath]);
 

@@ -1,0 +1,22 @@
+.studio {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.studio-layout {
+  display: flex;
+  height: 100%;
+}
+
+.studio-center {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .studio-layout {
+    flex-direction: column;
+  }
+}

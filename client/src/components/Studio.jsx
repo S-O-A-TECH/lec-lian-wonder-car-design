@@ -1,32 +1,31 @@
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import useStore from '../store';
+import BrandPanel from './BrandPanel';
+import CarViewer from './CarViewer';
+import PartsPanel from './PartsPanel';
+import Toolbar from './Toolbar';
+import MobileBottomSheet from './MobileBottomSheet';
+import NicknameModal from './NicknameModal';
+import './Studio.css';
 
 export default function Studio() {
-  const navigate = useNavigate();
+  const nickname = useStore((s) => s.nickname);
+  const [showNickname, setShowNickname] = useState(!nickname);
 
   return (
-    <div style={{
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--bg-primary)',
-    }}>
-      <h1 style={{ color: 'var(--accent)' }}>Design Studio</h1>
-      <p style={{ color: 'var(--text-secondary)', marginTop: 8 }}>Coming Soon</p>
-      <button
-        onClick={() => navigate('/')}
-        style={{
-          marginTop: 24,
-          padding: '8px 24px',
-          background: 'var(--bg-tertiary)',
-          color: 'var(--text-secondary)',
-          border: '1px solid var(--border)',
-          borderRadius: 6,
-        }}
-      >
-        Back to Home
-      </button>
+    <div className="studio">
+      {showNickname && <NicknameModal onClose={() => setShowNickname(false)} />}
+
+      <div className="studio-layout">
+        <BrandPanel />
+        <div className="studio-center">
+          <CarViewer />
+          <Toolbar />
+        </div>
+        <PartsPanel />
+      </div>
+
+      <MobileBottomSheet />
     </div>
   );
 }
