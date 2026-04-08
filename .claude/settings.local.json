@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:r3f.docs.pmnd.rs)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:vitejs.dev)",
+      "Bash(scripts/verify-*)",
+      "Bash(npm *)",
+      "Bash(cd client*)",
+      "Bash(cd server*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write(client/**/*.jsx)",
+        "command": "bash scripts/verify-syntax.sh \"$TOOL_FILE_PATH\" 2>/dev/null || echo 'SYNTAX CHECK: Review needed for $TOOL_FILE_PATH'"
+      },
+      {
+        "matcher": "Write(client/**/*.css)",
+        "command": "bash scripts/verify-syntax.sh \"$TOOL_FILE_PATH\" 2>/dev/null || echo 'CSS CHECK: Review needed for $TOOL_FILE_PATH'"
+      },
+      {
+        "matcher": "Write(server/**/*.js)",
+        "command": "bash scripts/verify-syntax.sh \"$TOOL_FILE_PATH\" 2>/dev/null || echo 'SYNTAX CHECK: Review needed for $TOOL_FILE_PATH'"
+      },
+      {
+        "matcher": "Edit(client/**/*.jsx)",
+        "command": "bash scripts/verify-syntax.sh \"$TOOL_FILE_PATH\" 2>/dev/null || echo 'SYNTAX CHECK: Review needed for $TOOL_FILE_PATH'"
+      },
+      {
+        "matcher": "Edit(server/**/*.js)",
+        "command": "bash scripts/verify-syntax.sh \"$TOOL_FILE_PATH\" 2>/dev/null || echo 'SYNTAX CHECK: Review needed for $TOOL_FILE_PATH'"
+      }
+    ]
+  }
+}
