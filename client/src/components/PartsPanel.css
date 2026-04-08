@@ -31,6 +31,78 @@
   font-weight: 600;
 }
 
+.selected-part-info {
+  margin-bottom: 8px;
+}
+
+.selected-part-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.clear-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.hint-text {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.painted-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.painted-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: left;
+  transition: border-color 0.2s;
+}
+
+.painted-item.active {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.painted-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zone-color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border-hover);
+  flex-shrink: 0;
+}
+
 .color-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -82,6 +154,50 @@
   font-size: 11px;
   text-transform: capitalize;
   color: var(--text-primary);
+}
+
+.finish-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.finish-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  transition: border-color 0.2s;
+}
+
+.finish-card.active {
+  border-color: var(--accent);
+}
+
+.finish-preview {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid var(--border-hover);
+}
+
+.finish-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+  display: block;
+}
+
+.finish-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: block;
 }
 
 .coming-soon {

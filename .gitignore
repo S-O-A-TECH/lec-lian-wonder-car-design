@@ -7,3 +7,5 @@ server/uploads/
 *.db
 .env
 .playwright-mcp/
+.mcp-setup/
+.mcp.json
