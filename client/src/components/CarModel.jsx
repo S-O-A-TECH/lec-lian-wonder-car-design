@@ -3,13 +3,15 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import useStore from '../store';
 import { finishPresets, wheelPresets } from '../data/carCatalog';
-import wheelMeta from '../data/wheelMeta';
+
 
 const TARGET_SIZE = 4.5;
 
 // Detect if a mesh is part of a wheel assembly.
 // Uses (?:^|[^a-z]) before "rim" to prevent matching inside "trim"
 const WHEEL_RE = /(?:^|[^a-z])(?:wheel|rim)|tire|tyre|hub|brake|caliper|disc|disk|rotor|rubber|pneu|thread|sidewall/i;
+// Tire-specific — used for accurate positioning (tires are centered on hub)
+const TIRE_RE = /tire|tyre|rubber|pneu|thread|sidewall/i;
 // Mesh-name exclusions: body parts that happen to share wheel material names
 const WHEEL_EXCLUDE_RE = /steering|pedal|arch|vent|light|lamp|wiper|parking|grill|grille|trim|decal|gauge|button|spring|exhaust/i;
 
@@ -203,86 +205,85 @@ function PlaceholderCar() {
   );
 }
 
-// Loads a wheel GLB, auto-normalizes it (center + scale), and renders
-// 4 copies at detected positions from the car model.
+// Loads a wheel GLB and renders 4 copies at detected positions.
+// Normalization via JSX nested groups (no geometry modification):
+//   outer group: position + scale (wheel location + size)
+//     inner group: centering offset + axle rotation
+//       primitive: raw GLB clone
 function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
   const gltf = useGLTF(wheelPath);
 
-  const { wheels, normScale } = useMemo(() => {
-    if (!gltf.scene || positions.length === 0) return { wheels: [], normScale: 1 };
+  const info = useMemo(() => {
+    if (!gltf.scene || positions.length === 0) return null;
 
-    // === Step 1: Normalize the wheel GLB ===
-    const template = gltf.scene.clone(true);
-
-    // Compute bounding box of the loaded wheel
-    const wBox = new THREE.Box3().setFromObject(template);
+    // Compute bounding box of loaded wheel
+    const wBox = new THREE.Box3().setFromObject(gltf.scene);
     const wCenter = new THREE.Vector3();
     const wSize = new THREE.Vector3();
     wBox.getCenter(wCenter);
     wBox.getSize(wSize);
 
-    // Center at origin
-    template.position.sub(wCenter);
+    // Detect axle (thinnest dimension) and compute rotation to align to X
+    const dims = [wSize.x, wSize.y, wSize.z];
+    const minIdx = dims.indexOf(Math.min(...dims));
+    const axleRot = [0, 0, 0];
+    if (minIdx === 1) axleRot[2] = Math.PI / 2;      // Y→X
+    else if (minIdx === 2) axleRot[1] = Math.PI / 2;  // Z→X
 
-    // Compute normalization scale: make max dimension = 1.0
     const maxDim = Math.max(wSize.x, wSize.y, wSize.z);
-    const ns = maxDim > 0 ? 1.0 / maxDim : 1;
-
+    const normScale = maxDim > 0 ? 1.0 / maxDim : 1;
     const targetDiam = wheelRadius * 2;
 
-    // === Step 2: Clone for each wheel position ===
-    const result = positions.map(({ label, position, isRight }) => {
-      const clone = template.clone(true);
-
-      // Force tire materials to black rubber
+    // Clone + apply materials for each position
+    const wheels = positions.map(({ label, position, isRight }) => {
+      const clone = gltf.scene.clone(true);
       let foundTire = false;
       clone.traverse((child) => {
         if (!child.isMesh || !child.material) return;
-        const matName = (child.material.name || child.name || '').toLowerCase();
-        const isTire = matName.includes('tire') || matName.includes('tyre') ||
-          matName.includes('rubber') || matName.includes('pneu') ||
-          matName.includes('sidewall') || matName.includes('thread');
-        if (isTire) {
+        const mn = (child.material.name || child.name || '').toLowerCase();
+        if (/tire|tyre|rubber|pneu|sidewall|thread/i.test(mn)) {
           child.material = new THREE.MeshStandardMaterial({
-            color: 0x111111, roughness: 0.9, metalness: 0.0,
+            color: 0x111111, roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide,
           });
           foundTire = true;
         }
       });
-      if (!foundTire) {
-        clone.traverse((child) => {
-          if (!child.isMesh || !child.material) return;
+      clone.traverse((child) => {
+        if (!child.isMesh || !child.material) return;
+        const mn = (child.material.name || child.name || '').toLowerCase();
+        if (!/tire|tyre|rubber|pneu|sidewall|thread/i.test(mn)) {
           child.material = new THREE.MeshStandardMaterial({
-            color: 0x333333, roughness: 0.3, metalness: 0.7,
+            color: foundTire ? 0x888888 : 0x444444,
+            roughness: 0.3, metalness: 0.8, side: THREE.DoubleSide,
           });
-        });
-      }
-
-      const wrapper = new THREE.Group();
-      wrapper.add(clone);
-      return { label, position, isRight, group: wrapper, targetDiam };
+        }
+      });
+      return { label, position, isRight, scene: clone };
     });
 
-    return { wheels: result, normScale: ns };
+
+    return { wCenter, normScale, targetDiam, axleRot, wheels };
   }, [gltf.scene, positions, wheelRadius]);
 
-  if (wheels.length === 0) return null;
+  if (!info || info.wheels.length === 0) return null;
+
+  const { wCenter, normScale, targetDiam, axleRot } = info;
 
   return (
     <group>
-      {wheels.map(({ label, position, isRight, group, targetDiam }) => {
+      {info.wheels.map(({ label, position, isRight, scene }) => {
         const s = targetDiam * carScale * normScale;
+        const px = position.x * carScale;
+        const py = position.y * carScale + yOffset;
+        const pz = position.z * carScale;
         return (
-          <primitive
-            key={label}
-            object={group}
-            position={[
-              position.x * carScale,
-              position.y * carScale + yOffset,
-              position.z * carScale,
-            ]}
-            scale={[s * (isRight ? -1 : 1), s, s]}
-          />
+          <group key={label} position={[px, py, pz]} scale={[s * (isRight ? -1 : 1), s, s]}>
+            <group rotation={axleRot}>
+              <group position={[-wCenter.x, -wCenter.y, -wCenter.z]}>
+                <primitive object={scene} />
+              </group>
+            </group>
+          </group>
         );
       })}
     </group>
@@ -317,6 +318,7 @@ function GlbModel({ modelPath }) {
 
     // Collect wheel meshes
     const detectedWheelMeshes = [];
+    const tireMeshes = []; // Tire-only meshes for accurate positioning
 
     // Second pass: store per-mesh data
     clonedScene.traverse((child) => {
@@ -329,6 +331,11 @@ function GlbModel({ modelPath }) {
         const isWheel = isWheelMesh(meshName, matName);
         if (isWheel) {
           detectedWheelMeshes.push(child);
+          // Also track tire-specific meshes for positioning
+          const combined = meshName + ' ' + matName;
+          if (TIRE_RE.test(combined)) {
+            tireMeshes.push(child);
+          }
         }
 
         // Determine zone: upper/lower (Y) + front/rear (Z)
@@ -396,22 +403,25 @@ function GlbModel({ modelPath }) {
 
     wheelData.current.hasWheels = detectedWheelMeshes.length > 0;
 
-    // Use pre-extracted wheel metadata if available (much more reliable)
-    const modelName = modelPath.replace(/^.*\//, '').replace('.glb', '');
-    const meta = wheelMeta[modelName];
-    if (meta && meta.p && Object.keys(meta.p).length >= 2) {
-      wheelData.current.positions = Object.entries(meta.p).map(([label, pos]) => ({
-        label,
-        position: new THREE.Vector3(pos[0], pos[1], pos[2]),
-        isRight: label.endsWith('R'),
-      }));
-      wheelData.current.radius = meta.r;
-    } else {
-      // Fallback: detect from mesh positions
-      const layout = detectWheelPositions(detectedWheelMeshes, totalBox);
-      wheelData.current.positions = layout.positions;
-      wheelData.current.radius = layout.wheelRadius;
+    // Use TIRE meshes for positioning (most accurate — centered on hub)
+    const positionMeshes = tireMeshes.length >= 2 ? tireMeshes : detectedWheelMeshes;
+    let layout = detectWheelPositions(positionMeshes, totalBox);
+
+    // Sanity checks — fall back if positions are unreliable
+    const carSizeVec = new THREE.Vector3();
+    totalBox.getSize(carSizeVec);
+    const xVals = layout.positions.map(p => p.position.x);
+    const xSpread = xVals.length > 1 ? Math.max(...xVals) - Math.min(...xVals) : 0;
+    const needsFallback = layout.positions.length < 4 ||
+      layout.wheelRadius > carSizeVec.y * 0.35 ||
+      xSpread < carSizeVec.x * 0.3; // all clustered at center X
+    if (needsFallback) {
+      layout = fallbackWheelLayout(center, carSizeVec, totalBox);
     }
+
+    wheelData.current.positions = layout.positions;
+    wheelData.current.radius = layout.wheelRadius;
+
 
   }, [clonedScene]);
 
