@@ -208,6 +208,17 @@
   padding: 20px;
 }
 
+.wheel-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wheel-icon {
+  font-size: 24px;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 1023px) {
   .parts-panel {
     display: none;

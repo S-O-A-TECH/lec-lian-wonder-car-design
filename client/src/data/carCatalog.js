@@ -1,5 +1,5 @@
 export const defaultPartsConfig = {
-  wheels: 'sport-22',
+  wheels: 'original',
   spoiler: 'none',
   grille: 'mesh-chrome',
   headlights: 'led-slim',
@@ -35,6 +35,15 @@ export const finishPresets = {
     envMapIntensity: 3.0,
   },
 };
+
+// All wheel GLBs are pre-standardized via Blender: axle=X, center=origin, diameter=1.0
+export const wheelPresets = [
+  { id: 'original', name: 'Original', path: null, desc: 'Factory wheels' },
+  { id: 'sport-22', name: 'Sport 22"', path: '/models/wheels/sport-22.glb', desc: 'Aggressive sport design' },
+  { id: 'classic-20', name: 'Classic 20"', path: '/models/wheels/classic-20.glb', desc: 'Elegant classic spokes' },
+  { id: 'turbine-21', name: 'Turbine 21"', path: '/models/wheels/turbine-21.glb', desc: 'Aerodynamic turbine style' },
+  { id: 'multi-spoke', name: 'Multi-Spoke', path: '/models/wheels/multi-spoke.glb', desc: 'Premium multi-spoke' },
+];
 
 export const colorPresets = [
   // Whites

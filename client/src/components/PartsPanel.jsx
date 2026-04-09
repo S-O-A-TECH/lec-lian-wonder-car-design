@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useStore from '../store';
-import { colorPresets, finishPresets } from '../data/carCatalog';
+import { colorPresets, finishPresets, wheelPresets } from '../data/carCatalog';
 import './PartsPanel.css';
 
 const categories = [
@@ -188,7 +188,32 @@ export default function PartsPanel() {
           </>
         )}
 
-        {!['color', 'finish', 'windows'].includes(activeCategory) && (
+        {activeCategory === 'wheels' && (
+          <>
+            <div className="panel-label">WHEELS</div>
+            <div className="finish-grid">
+              {wheelPresets.map((w) => (
+                <button
+                  key={w.id}
+                  className={`finish-card ${partsConfig.wheels === w.id ? 'active' : ''}`}
+                  onClick={() => setPart('wheels', w.id)}
+                >
+                  <div className="finish-preview wheel-preview" style={{
+                    background: w.id === 'original'
+                      ? 'radial-gradient(circle, #444 0%, #222 60%, #111 100%)'
+                      : 'radial-gradient(circle at 40% 40%, #888 0%, #555 30%, #222 70%, #111 100%)',
+                  }}>
+                    {w.id === 'original' && <span className="wheel-icon">⟲</span>}
+                  </div>
+                  <span className="finish-name">{w.name}</span>
+                  <span className="finish-desc">{w.desc}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!['color', 'finish', 'windows', 'wheels'].includes(activeCategory) && (
           <div className="option-grid">
             <p className="coming-soon">
               3D parts models coming soon
