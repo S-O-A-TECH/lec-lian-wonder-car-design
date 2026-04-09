@@ -356,8 +356,10 @@ function GlbModel({ modelPath }) {
     if (!clonedScene) return;
     originals.current.clear();
 
-    // CRITICAL: R3F's <primitive> may have already applied carScale to clonedScene.
-    // Reset to identity before computing bounding box to get UNSCALED coordinates.
+    // CRITICAL: R3F's <primitive> may have already applied carScale/position.
+    // Temporarily reset to identity for bounding box computation, then restore.
+    const savedScale = clonedScene.scale.clone();
+    const savedPosition = clonedScene.position.clone();
     clonedScene.scale.set(1, 1, 1);
     clonedScene.position.set(0, 0, 0);
     clonedScene.updateMatrixWorld(true);
@@ -460,6 +462,10 @@ function GlbModel({ modelPath }) {
     wheelData.current.radius = universalRadius;
     wheelData.current.isXLong = isXLong;
 
+    // Restore scale/position so R3F rendering and CameraFitter work correctly
+    clonedScene.scale.copy(savedScale);
+    clonedScene.position.copy(savedPosition);
+    clonedScene.updateMatrixWorld(true);
 
   }, [clonedScene]);
 
