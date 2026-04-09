@@ -129,9 +129,9 @@ function fallbackWheelLayout(carCenter, carSize, carBox) {
   const lengthCenter = isXLong ? carCenter.x : carCenter.z;
   const widthCenter = isXLong ? carCenter.z : carCenter.x;
 
-  const widthOffset = widthSize * 0.43;
-  const lengthFront = lengthCenter + lengthSize * 0.32;
-  const lengthRear = lengthCenter - lengthSize * 0.32;
+  const widthOffset = widthSize * 0.40;
+  const lengthFront = lengthCenter + lengthSize * 0.30;
+  const lengthRear = lengthCenter - lengthSize * 0.30;
 
   function pos(wSide, lPos) {
     const w = widthCenter + wSide * widthOffset;
@@ -447,8 +447,8 @@ function GlbModel({ modelPath }) {
     }
 
     // Always use car-height-proportional radius (universal, consistent)
-    // carHeight * 0.12 gives 24% height/diameter ratio — fits most wheel wells.
-    const universalRadius = carSizeVec.y * 0.12;
+    // carHeight * 0.14 gives 28% height/diameter ratio — fills wheel wells better.
+    const universalRadius = carSizeVec.y * 0.14;
 
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = universalRadius;
