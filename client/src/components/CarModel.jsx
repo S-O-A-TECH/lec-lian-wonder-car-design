@@ -237,74 +237,87 @@ function PlaceholderCar() {
 function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLong }) {
   const gltf = useGLTF(wheelPath);
 
-  const info = useMemo(() => {
+  // Extract mesh data (geometry + material) from the wheel GLB,
+  // baking all node transforms into geometry vertices.
+  // This eliminates nested transforms that cause scale artifacts.
+  const wheelMeshes = useMemo(() => {
     if (!gltf.scene || positions.length === 0) return null;
 
-    // Compute bounding box of loaded wheel
-    const wBox = new THREE.Box3().setFromObject(gltf.scene);
+    // Step 1: collect all meshes with their world transforms baked into geometry
+    gltf.scene.updateMatrixWorld(true);
+    const bakedMeshes = [];
+    gltf.scene.traverse((child) => {
+      if (!child.isMesh || !child.geometry) return;
+      const geom = child.geometry.clone();
+      geom.applyMatrix4(child.matrixWorld);
+      const mn = (child.material?.name || child.name || '').toLowerCase();
+      const isTire = /tire|tyre|rubber|pneu|sidewall|thread/i.test(mn);
+      bakedMeshes.push({ geometry: geom, isTire });
+    });
+
+    if (bakedMeshes.length === 0) return null;
+
+    // Step 2: compute bounding box of all baked geometries
+    const totalBox = new THREE.Box3();
+    for (const bm of bakedMeshes) {
+      bm.geometry.computeBoundingBox();
+      totalBox.union(bm.geometry.boundingBox);
+    }
     const wCenter = new THREE.Vector3();
     const wSize = new THREE.Vector3();
-    wBox.getCenter(wCenter);
-    wBox.getSize(wSize);
+    totalBox.getCenter(wCenter);
+    totalBox.getSize(wSize);
 
-
-    // Detect axle (thinnest dimension) and compute rotation
-    // For Z-long cars: axle should be along X
-    // For X-long cars: axle should be along Z
-    const dims = [wSize.x, wSize.y, wSize.z];
-    const minIdx = dims.indexOf(Math.min(...dims));
-    const targetAxle = isXLong ? 2 : 0; // Z-axis for X-long, X-axis for Z-long
-    const axleRot = [0, 0, 0];
-    if (minIdx !== targetAxle) {
-      if (minIdx === 0 && targetAxle === 2) axleRot[1] = Math.PI / 2;  // X→Z
-      else if (minIdx === 1 && targetAxle === 0) axleRot[2] = Math.PI / 2;  // Y→X
-      else if (minIdx === 1 && targetAxle === 2) axleRot[0] = Math.PI / 2;  // Y→Z
-      else if (minIdx === 2 && targetAxle === 0) axleRot[1] = Math.PI / 2;  // Z→X
+    // Step 3: center all geometries at origin
+    for (const bm of bakedMeshes) {
+      bm.geometry.translate(-wCenter.x, -wCenter.y, -wCenter.z);
     }
 
+    // Step 4: detect axle and rotate if needed
+    const dims = [wSize.x, wSize.y, wSize.z];
+    const minIdx = dims.indexOf(Math.min(...dims));
+    const targetAxle = isXLong ? 2 : 0;
+    if (minIdx !== targetAxle) {
+      const rotMat = new THREE.Matrix4();
+      if (minIdx === 0 && targetAxle === 2) rotMat.makeRotationY(Math.PI / 2);
+      else if (minIdx === 1 && targetAxle === 0) rotMat.makeRotationZ(Math.PI / 2);
+      else if (minIdx === 1 && targetAxle === 2) rotMat.makeRotationX(Math.PI / 2);
+      else if (minIdx === 2 && targetAxle === 0) rotMat.makeRotationY(Math.PI / 2);
+      for (const bm of bakedMeshes) bm.geometry.applyMatrix4(rotMat);
+      // Re-measure after rotation
+      totalBox.makeEmpty();
+      for (const bm of bakedMeshes) {
+        bm.geometry.computeBoundingBox();
+        totalBox.union(bm.geometry.boundingBox);
+      }
+      totalBox.getSize(wSize);
+    }
+
+    // Step 5: compute normalization scale
     const maxDim = Math.max(wSize.x, wSize.y, wSize.z);
     const normScale = maxDim > 0 ? 1.0 / maxDim : 1;
     const targetDiam = wheelRadius * 2;
 
-    // Clone + apply materials for each position
-    const wheels = positions.map(({ label, position, isRight }) => {
-      const clone = gltf.scene.clone(true);
-      let foundTire = false;
-      clone.traverse((child) => {
-        if (!child.isMesh || !child.material) return;
-        const mn = (child.material.name || child.name || '').toLowerCase();
-        if (/tire|tyre|rubber|pneu|sidewall|thread/i.test(mn)) {
-          child.material = new THREE.MeshStandardMaterial({
-            color: 0x111111, roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide,
-          });
-          foundTire = true;
-        }
-      });
-      clone.traverse((child) => {
-        if (!child.isMesh || !child.material) return;
-        const mn = (child.material.name || child.name || '').toLowerCase();
-        if (!/tire|tyre|rubber|pneu|sidewall|thread/i.test(mn)) {
-          child.material = new THREE.MeshStandardMaterial({
-            color: foundTire ? 0x888888 : 0x444444,
-            roughness: 0.3, metalness: 0.8, side: THREE.DoubleSide,
-          });
-        }
-      });
-      return { label, position, isRight, scene: clone };
+    // Step 6: create materials
+    const hasTire = bakedMeshes.some(m => m.isTire);
+    const tireMat = new THREE.MeshStandardMaterial({
+      color: 0x111111, roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide,
+    });
+    const rimMat = new THREE.MeshStandardMaterial({
+      color: hasTire ? 0x888888 : 0x444444,
+      roughness: 0.3, metalness: 0.8, side: THREE.DoubleSide,
     });
 
+    return { bakedMeshes, normScale, targetDiam, tireMat, rimMat };
+  }, [gltf.scene, positions, wheelRadius, isXLong]);
 
-    return { wCenter, normScale, targetDiam, axleRot, wheels };
-  }, [gltf.scene, positions, wheelRadius]);
+  if (!wheelMeshes) return null;
 
-  if (!info || info.wheels.length === 0) return null;
-
-  const { wCenter, normScale, targetDiam, axleRot } = info;
-
+  const { bakedMeshes, normScale, targetDiam, tireMat, rimMat } = wheelMeshes;
 
   return (
     <group>
-      {info.wheels.map(({ label, position, isRight, scene }) => {
+      {positions.map(({ label, position, isRight }) => {
         const s = targetDiam * carScale * normScale;
         const flip = isRight ? -1 : 1;
         const px = position.x * carScale;
@@ -313,12 +326,10 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
         const sx = isXLong ? s : s * flip;
         const sz = isXLong ? s * flip : s;
         return (
-          <group key={label}
-            position={[px - wCenter.x * sx, py - wCenter.y * s, pz - wCenter.z * sz]}
-            scale={[sx, s, sz]}
-            rotation={axleRot}
-          >
-            <primitive object={scene} />
+          <group key={label} position={[px, py, pz]} scale={[sx, s, sz]}>
+            {bakedMeshes.map((bm, mi) => (
+              <mesh key={mi} geometry={bm.geometry} material={bm.isTire ? tireMat : rimMat} />
+            ))}
           </group>
         );
       })}
@@ -436,9 +447,8 @@ function GlbModel({ modelPath }) {
     }
 
     // Always use car-height-proportional radius (universal, consistent)
-    // Tire detection gives variable sizes due to mesh bounding box differences.
-    // carHeight * 0.175 gives realistic 35% height/diameter ratio for all cars.
-    const universalRadius = carSizeVec.y * 0.175;
+    // carHeight * 0.12 gives 24% height/diameter ratio — fits most wheel wells.
+    const universalRadius = carSizeVec.y * 0.12;
 
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = universalRadius;
