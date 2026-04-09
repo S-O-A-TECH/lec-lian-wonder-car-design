@@ -356,6 +356,12 @@ function GlbModel({ modelPath }) {
     if (!clonedScene) return;
     originals.current.clear();
 
+    // CRITICAL: R3F's <primitive> may have already applied carScale to clonedScene.
+    // Reset to identity before computing bounding box to get UNSCALED coordinates.
+    clonedScene.scale.set(1, 1, 1);
+    clonedScene.position.set(0, 0, 0);
+    clonedScene.updateMatrixWorld(true);
+
     // First pass: compute overall bounding box
     const totalBox = new THREE.Box3().setFromObject(clonedScene);
     const center = new THREE.Vector3();
