@@ -3,6 +3,7 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import useStore from '../store';
 import { finishPresets, wheelPresets } from '../data/carCatalog';
+import wheelMeta from '../data/wheelMeta';
 
 const TARGET_SIZE = 4.5;
 
@@ -394,9 +395,23 @@ function GlbModel({ modelPath }) {
     }
 
     wheelData.current.hasWheels = detectedWheelMeshes.length > 0;
-    const layout = detectWheelPositions(detectedWheelMeshes, totalBox);
-    wheelData.current.positions = layout.positions;
-    wheelData.current.radius = layout.wheelRadius;
+
+    // Use pre-extracted wheel metadata if available (much more reliable)
+    const modelName = modelPath.replace(/^.*\//, '').replace('.glb', '');
+    const meta = wheelMeta[modelName];
+    if (meta && meta.p && Object.keys(meta.p).length >= 2) {
+      wheelData.current.positions = Object.entries(meta.p).map(([label, pos]) => ({
+        label,
+        position: new THREE.Vector3(pos[0], pos[1], pos[2]),
+        isRight: label.endsWith('R'),
+      }));
+      wheelData.current.radius = meta.r;
+    } else {
+      // Fallback: detect from mesh positions
+      const layout = detectWheelPositions(detectedWheelMeshes, totalBox);
+      wheelData.current.positions = layout.positions;
+      wheelData.current.radius = layout.wheelRadius;
+    }
 
   }, [clonedScene]);
 
