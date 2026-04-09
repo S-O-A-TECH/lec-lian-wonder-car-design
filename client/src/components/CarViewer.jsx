@@ -81,7 +81,6 @@ function CameraFitter() {
 
 export default function CarViewer() {
   const selectedModel = useStore((s) => s.selectedModel);
-
   const modelPath = selectedModel
     ? `/models/${selectedModel.id}.glb`
     : null;

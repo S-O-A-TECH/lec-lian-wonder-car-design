@@ -247,6 +247,21 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
     wBox.getCenter(wCenter);
     wBox.getSize(wSize);
 
+    // Also check individual mesh sizes to find actual geometry extent
+    let maxGeomSize = 0;
+    gltf.scene.traverse(c => {
+      if (c.isMesh && c.geometry) {
+        c.geometry.computeBoundingBox();
+        const gs = new THREE.Vector3();
+        c.geometry.boundingBox.getSize(gs);
+        maxGeomSize = Math.max(maxGeomSize, gs.x, gs.y, gs.z);
+      }
+    });
+    console.log('[WS]', wheelPath,
+      '| sceneBox:', wSize.x.toFixed(2), wSize.y.toFixed(2), wSize.z.toFixed(2),
+      '| center:', wCenter.x.toFixed(2), wCenter.y.toFixed(2), wCenter.z.toFixed(2),
+      '| maxGeomSize:', maxGeomSize.toFixed(2));
+
     // Detect axle (thinnest dimension) and compute rotation
     // For Z-long cars: axle should be along X
     // For X-long cars: axle should be along Z
@@ -305,20 +320,19 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
     <group>
       {info.wheels.map(({ label, position, isRight, scene }) => {
         const s = targetDiam * carScale * normScale;
+        const flip = isRight ? -1 : 1;
         const px = position.x * carScale;
         const py = position.y * carScale + yOffset;
         const pz = position.z * carScale;
+        const sx = isXLong ? s : s * flip;
+        const sz = isXLong ? s * flip : s;
         return (
-          <group key={label} position={[px, py, pz]}
-            scale={isXLong
-              ? [s, s, s * (isRight ? -1 : 1)]   // X-long: axle along Z, flip Z
-              : [s * (isRight ? -1 : 1), s, s]}   // Z-long: axle along X, flip X
+          <group key={label}
+            position={[px - wCenter.x * sx, py - wCenter.y * s, pz - wCenter.z * sz]}
+            scale={[sx, s, sz]}
+            rotation={axleRot}
           >
-            <group rotation={axleRot}>
-              <group position={[-wCenter.x, -wCenter.y, -wCenter.z]}>
-                <primitive object={scene} />
-              </group>
-            </group>
+            <primitive object={scene} />
           </group>
         );
       })}
@@ -435,9 +449,20 @@ function GlbModel({ modelPath }) {
       layout = fallbackWheelLayout(center, carSizeVec, totalBox);
     }
 
+    // Always use car-height-proportional radius (universal, consistent)
+    // Tire detection gives variable sizes due to mesh bounding box differences.
+    // carHeight * 0.175 gives realistic 35% height/diameter ratio for all cars.
+    const universalRadius = carSizeVec.y * 0.175;
+
     wheelData.current.positions = layout.positions;
-    wheelData.current.radius = layout.wheelRadius;
+    wheelData.current.radius = universalRadius;
     wheelData.current.isXLong = isXLong;
+
+    const _mn = modelPath.replace(/^.*\//, '').replace('.glb', '');
+    console.log('[W]', _mn, 'XL:', isXLong, 'tires:', tireMeshes.length, 'all:', detectedWheelMeshes.length,
+      'fb:', needsFallback, 'r:', layout.wheelRadius.toFixed(3),
+      'car:', carSizeVec.x.toFixed(2)+'x'+carSizeVec.y.toFixed(2)+'x'+carSizeVec.z.toFixed(2),
+      layout.positions.map(p => p.label+':'+p.position.x.toFixed(2)+','+p.position.y.toFixed(2)+','+p.position.z.toFixed(2)).join(' '));
 
 
   }, [clonedScene]);
