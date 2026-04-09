@@ -453,7 +453,7 @@ function GlbModel({ modelPath }) {
     }
 
     // Always use car-height-proportional radius (universal, consistent)
-    // carHeight * 0.14 gives 28% height/diameter ratio — fills wheel wells better.
+    // carHeight * 0.14 gives 28% height/diameter ratio.
     const universalRadius = carSizeVec.y * 0.14;
 
     wheelData.current.positions = layout.positions;
