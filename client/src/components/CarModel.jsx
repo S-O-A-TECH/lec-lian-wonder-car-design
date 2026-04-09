@@ -6,9 +6,11 @@ import { finishPresets, wheelPresets } from '../data/carCatalog';
 
 const TARGET_SIZE = 4.5;
 
-// Detect if a mesh is part of a wheel assembly
-const WHEEL_RE = /wheel|rim|tire|tyre|hub|brake|caliper|disc|disk|rotor/i;
-const WHEEL_EXCLUDE_RE = /steering|pedal|arch|vent|light|lamp|mirror|wiper/i;
+// Detect if a mesh is part of a wheel assembly.
+// Uses (?:^|[^a-z]) before "rim" to prevent matching inside "trim"
+const WHEEL_RE = /(?:^|[^a-z])(?:wheel|rim)|tire|tyre|hub|brake|caliper|disc|disk|rotor|rubber|pneu|thread|sidewall/i;
+// Mesh-name exclusions: body parts that happen to share wheel material names
+const WHEEL_EXCLUDE_RE = /steering|pedal|arch|vent|light|lamp|wiper|parking|grill|grille|trim|decal|gauge|button|spring|exhaust/i;
 
 // Detect interior/blocker meshes that should not be paintable from exterior
 const BLOCKER_RE = /blocking|blocker|occluder|int_block|seat|leather|steering|steer|carpet|dashboard|console|interior|cabin|upholster/i;
@@ -17,8 +19,10 @@ const BLOCKER_RE = /blocking|blocker|occluder|int_block|seat|leather|steering|st
 const OVERLAY_RE = /ext_gloss|ext_matte|ext_light|clear.?coat|finish_overlay|coat_shad/i;
 
 function isWheelMesh(meshName, matName) {
+  // Check exclude against mesh name only (material names can be shared)
+  if (WHEEL_EXCLUDE_RE.test(meshName)) return false;
+  // Check positive match against combined name
   const combined = meshName + ' ' + matName;
-  if (WHEEL_EXCLUDE_RE.test(combined)) return false;
   return WHEEL_RE.test(combined);
 }
 
@@ -362,7 +366,33 @@ function GlbModel({ modelPath }) {
       }
     });
 
-    // Estimate wheel layout from car bounding box
+    // Expand wheel detection: find ALL meshes near detected wheel meshes.
+    // This catches hub caps, spokes, brake discs etc. that share the same
+    // physical space but have non-wheel material names (e.g. "full_black").
+    if (detectedWheelMeshes.length > 0) {
+      const wheelBoxes = detectedWheelMeshes.map(m => {
+        const b = new THREE.Box3().setFromObject(m);
+        b.expandByScalar(b.getSize(new THREE.Vector3()).length() * 0.15);
+        return b;
+      });
+      const detectedUUIDs = new Set(detectedWheelMeshes.map(m => m.uuid));
+
+      clonedScene.traverse((child) => {
+        if (!child.isMesh || detectedUUIDs.has(child.uuid)) return;
+        const orig = originals.current.get(child.uuid);
+        if (!orig || orig.isWindow) return;
+        const meshCenter = new THREE.Vector3();
+        new THREE.Box3().setFromObject(child).getCenter(meshCenter);
+        for (const wb of wheelBoxes) {
+          if (wb.containsPoint(meshCenter)) {
+            orig.isWheel = true;
+            detectedWheelMeshes.push(child);
+            break;
+          }
+        }
+      });
+    }
+
     wheelData.current.hasWheels = detectedWheelMeshes.length > 0;
     const layout = detectWheelPositions(detectedWheelMeshes, totalBox);
     wheelData.current.positions = layout.positions;
