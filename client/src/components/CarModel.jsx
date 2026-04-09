@@ -13,6 +13,9 @@ const WHEEL_EXCLUDE_RE = /steering|pedal|arch|vent|light|lamp|mirror|wiper/i;
 // Detect interior/blocker meshes that should not be paintable from exterior
 const BLOCKER_RE = /blocking|blocker|occluder|int_block|seat|leather|steering|steer|carpet|dashboard|console|interior|cabin|upholster/i;
 
+// Surface finish overlays — click-through to reach actual paint underneath
+const OVERLAY_RE = /ext_gloss|ext_matte|ext_light|clear.?coat|finish_overlay|coat_shad/i;
+
 function isWheelMesh(meshName, matName) {
   const combined = meshName + ' ' + matName;
   if (WHEEL_EXCLUDE_RE.test(combined)) return false;
@@ -248,12 +251,12 @@ function GlbModel({ modelPath }) {
         const combinedName = matName + ' ' + meshName;
         const isWindow = isWindowMaterial(matName, child.name || '', mat);
 
-        // Check if seat/leather material with white/light color needs default dark color
+        // Check if seat/leather/interior material needs default dark color
         const matLower = matName.toLowerCase();
-        const isSeatLike = /seat|leather|upholster/i.test(matLower) && !isWindow;
+        const isSeatOrInterior = /seat|leather|upholster|putih|carpet|belt/i.test(matLower) && !isWindow;
         const origColor = mat.color;
         const isWhiteish = origColor && (origColor.r + origColor.g + origColor.b) > 2.5;
-        const needsSeatFix = isSeatLike && isWhiteish;
+        const needsSeatFix = isSeatOrInterior && isWhiteish;
 
         originals.current.set(child.uuid, {
           material: mat.clone(),
@@ -263,6 +266,7 @@ function GlbModel({ modelPath }) {
           isOriginallyOpaque: !mat.transparent || mat.opacity >= 0.95,
           isWheel,
           isBlocker: BLOCKER_RE.test(combinedName),
+          isOverlay: OVERLAY_RE.test(matName),
           needsSeatFix,
           hasVertexColors: !!mat.vertexColors,
         });
@@ -320,14 +324,15 @@ function GlbModel({ modelPath }) {
           // keep original material to hide empty interiors
           child.material = orig.material.clone();
         } else {
+          // Realistic clear glass — slightly tinted so body color doesn't bleed through
           child.material = new THREE.MeshPhysicalMaterial({
-            color: 0xffffff,
+            color: 0x101015,
             roughness: 0.0,
-            metalness: 0.0,
+            metalness: 0.1,
             transparent: true,
-            opacity: 0.1,
+            opacity: 0.45,
             depthWrite: false,
-            envMapIntensity: 0.3,
+            envMapIntensity: 1.0,
             side: THREE.DoubleSide,
           });
         }
@@ -357,11 +362,21 @@ function GlbModel({ modelPath }) {
         });
         child.material.name = orig.matName;
       } else if (orig.needsSeatFix) {
-        // White seat/leather → force dark leather color
-        child.material = orig.material.clone();
-        child.material.color = new THREE.Color(0x1a1410);
-        child.material.roughness = 0.7;
-        child.material.metalness = 0.0;
+        // White seat/leather/interior → force realistic dark color
+        const origMat = orig.material;
+        if (origMat.map) {
+          // Has texture: tint it dark by multiplying
+          child.material = origMat.clone();
+          child.material.color = new THREE.Color(0x2a2018);
+        } else {
+          // No texture: create dark leather material
+          child.material = new THREE.MeshStandardMaterial({
+            color: 0x1a1410,
+            roughness: 0.75,
+            metalness: 0.0,
+          });
+        }
+        child.material.name = orig.matName;
       } else {
         child.material = orig.material.clone();
       }
@@ -418,7 +433,7 @@ function GlbModel({ modelPath }) {
       if (!mesh) continue;
       const orig = originals.current.get(mesh.uuid);
       if (!orig) continue;
-      if (orig.isWheel || orig.isBlocker) continue;
+      if (orig.isWheel || orig.isBlocker || orig.isOverlay) continue;
       if (orig.isWindow) { passedThroughWindow = true; continue; }
       if (passedThroughWindow) continue; // interior — behind window
       setSelectedMaterial(orig.zoneKey);
