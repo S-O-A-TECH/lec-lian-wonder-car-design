@@ -247,20 +247,6 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
     wBox.getCenter(wCenter);
     wBox.getSize(wSize);
 
-    // Also check individual mesh sizes to find actual geometry extent
-    let maxGeomSize = 0;
-    gltf.scene.traverse(c => {
-      if (c.isMesh && c.geometry) {
-        c.geometry.computeBoundingBox();
-        const gs = new THREE.Vector3();
-        c.geometry.boundingBox.getSize(gs);
-        maxGeomSize = Math.max(maxGeomSize, gs.x, gs.y, gs.z);
-      }
-    });
-    console.log('[WS]', wheelPath,
-      '| sceneBox:', wSize.x.toFixed(2), wSize.y.toFixed(2), wSize.z.toFixed(2),
-      '| center:', wCenter.x.toFixed(2), wCenter.y.toFixed(2), wCenter.z.toFixed(2),
-      '| maxGeomSize:', maxGeomSize.toFixed(2));
 
     // Detect axle (thinnest dimension) and compute rotation
     // For Z-long cars: axle should be along X
@@ -457,12 +443,6 @@ function GlbModel({ modelPath }) {
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = universalRadius;
     wheelData.current.isXLong = isXLong;
-
-    const _mn = modelPath.replace(/^.*\//, '').replace('.glb', '');
-    console.log('[W]', _mn, 'XL:', isXLong, 'tires:', tireMeshes.length, 'all:', detectedWheelMeshes.length,
-      'fb:', needsFallback, 'r:', layout.wheelRadius.toFixed(3),
-      'car:', carSizeVec.x.toFixed(2)+'x'+carSizeVec.y.toFixed(2)+'x'+carSizeVec.z.toFixed(2),
-      layout.positions.map(p => p.label+':'+p.position.x.toFixed(2)+','+p.position.y.toFixed(2)+','+p.position.z.toFixed(2)).join(' '));
 
 
   }, [clonedScene]);
