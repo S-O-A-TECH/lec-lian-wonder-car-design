@@ -22,30 +22,102 @@ function isWheelMesh(meshName, matName) {
   return WHEEL_RE.test(combined);
 }
 
-// Estimate 4 wheel positions from overall car bounding box
-// Many models have all 4 wheels baked into single meshes, so we can't
-// extract per-wheel positions from mesh bounding boxes. Instead, we
-// use the car's overall dimensions to place wheels at standard positions.
-function estimateWheelLayout(carBox) {
-  const center = new THREE.Vector3();
-  const size = new THREE.Vector3();
-  carBox.getCenter(center);
-  carBox.getSize(size);
+// Detect actual wheel positions from wheel meshes in the car model.
+// Groups meshes by quadrant (FL/FR/RL/RR) relative to car center,
+// averages positions within each group, and measures radius directly.
+// Falls back to estimation only when wheel meshes can't be grouped.
+function detectWheelPositions(wheelMeshes, carBox) {
+  const carCenter = new THREE.Vector3();
+  const carSize = new THREE.Vector3();
+  carBox.getCenter(carCenter);
+  carBox.getSize(carSize);
 
-  const wheelRadius = size.y * 0.175;
+  if (wheelMeshes.length === 0) {
+    return fallbackWheelLayout(carCenter, carSize, carBox);
+  }
+
+  // Compute bounding box per wheel mesh
+  const infos = wheelMeshes.map(mesh => {
+    const box = new THREE.Box3().setFromObject(mesh);
+    const c = new THREE.Vector3();
+    const s = new THREE.Vector3();
+    box.getCenter(c);
+    box.getSize(s);
+    // Radius: half of the max of Y and Z dimensions (X is axle width)
+    const radius = Math.max(s.y, s.z) / 2;
+    return { center: c, radius, sizeY: s.y };
+  });
+
+  // Group by quadrant
+  const groups = { FL: [], FR: [], RL: [], RR: [] };
+  for (const info of infos) {
+    const isRight = info.center.x > carCenter.x;
+    const isFront = info.center.z > carCenter.z;
+    const key = (isFront ? 'F' : 'R') + (isRight ? 'R' : 'L');
+    groups[key].push(info);
+  }
+
+  const positions = [];
+  let totalRadius = 0;
+  let radiusCount = 0;
+
+  for (const [label, group] of Object.entries(groups)) {
+    if (group.length === 0) continue;
+    const avg = new THREE.Vector3();
+    let maxRadius = 0;
+    for (const info of group) {
+      avg.add(info.center);
+      maxRadius = Math.max(maxRadius, info.radius);
+    }
+    avg.divideScalar(group.length);
+    positions.push({ label, position: avg, isRight: label.endsWith('R') });
+    totalRadius += maxRadius;
+    radiusCount++;
+  }
+
+  if (positions.length < 2) {
+    return fallbackWheelLayout(carCenter, carSize, carBox);
+  }
+
+  const avgRadius = totalRadius / radiusCount;
+
+  // If we have 2 positions (left+right combined), mirror to get 4
+  if (positions.length === 2) {
+    const existing = [...positions];
+    for (const p of existing) {
+      const mirrorLabel = p.label[0] + (p.isRight ? 'L' : 'R');
+      if (!positions.find(q => q.label === mirrorLabel)) {
+        positions.push({
+          label: mirrorLabel,
+          position: new THREE.Vector3(
+            carCenter.x * 2 - p.position.x,
+            p.position.y,
+            p.position.z,
+          ),
+          isRight: !p.isRight,
+        });
+      }
+    }
+  }
+
+  return { positions, wheelRadius: avgRadius };
+}
+
+function fallbackWheelLayout(carCenter, carSize, carBox) {
+  const wheelRadius = carSize.y * 0.175;
   const wheelY = carBox.min.y + wheelRadius;
-  const xOffset = size.x * 0.43;
-  const zFront = center.z + size.z * 0.32;
-  const zRear = center.z - size.z * 0.32;
-
-  const positions = [
-    { label: 'FL', position: new THREE.Vector3(center.x - xOffset, wheelY, zFront), isRight: false },
-    { label: 'FR', position: new THREE.Vector3(center.x + xOffset, wheelY, zFront), isRight: true },
-    { label: 'RL', position: new THREE.Vector3(center.x - xOffset, wheelY, zRear), isRight: false },
-    { label: 'RR', position: new THREE.Vector3(center.x + xOffset, wheelY, zRear), isRight: true },
-  ];
-
-  return { positions, wheelRadius };
+  const xOffset = carSize.x * 0.43;
+  const zFront = carCenter.z + carSize.z * 0.32;
+  const zRear = carCenter.z - carSize.z * 0.32;
+  return {
+    positions: [
+      { label: 'FL', position: new THREE.Vector3(carCenter.x - xOffset, wheelY, zFront), isRight: false },
+      { label: 'FR', position: new THREE.Vector3(carCenter.x + xOffset, wheelY, zFront), isRight: true },
+      { label: 'RL', position: new THREE.Vector3(carCenter.x - xOffset, wheelY, zRear), isRight: false },
+      { label: 'RR', position: new THREE.Vector3(carCenter.x + xOffset, wheelY, zRear), isRight: true },
+    ],
+    wheelRadius,
+  };
 }
 
 // Materials that should NEVER be classified as windows, even if transparent.
@@ -126,28 +198,45 @@ function PlaceholderCar() {
   );
 }
 
-// Loads a standardized wheel GLB (axle=X, center=origin, diameter=1.0)
-// and renders 4 copies at detected positions
+// Loads a wheel GLB, auto-normalizes it (center + scale), and renders
+// 4 copies at detected positions from the car model.
 function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
   const gltf = useGLTF(wheelPath);
 
-  const wheels = useMemo(() => {
-    if (!gltf.scene || positions.length === 0) return [];
+  const { wheels, normScale } = useMemo(() => {
+    if (!gltf.scene || positions.length === 0) return { wheels: [], normScale: 1 };
 
-    // All wheel models are pre-standardized: axle=X, center=origin, diameter=1.0
-    // Scale = targetDiam * carScale (combined, applied via JSX scale prop)
+    // === Step 1: Normalize the wheel GLB ===
+    const template = gltf.scene.clone(true);
+
+    // Compute bounding box of the loaded wheel
+    const wBox = new THREE.Box3().setFromObject(template);
+    const wCenter = new THREE.Vector3();
+    const wSize = new THREE.Vector3();
+    wBox.getCenter(wCenter);
+    wBox.getSize(wSize);
+
+    // Center at origin
+    template.position.sub(wCenter);
+
+    // Compute normalization scale: make max dimension = 1.0
+    const maxDim = Math.max(wSize.x, wSize.y, wSize.z);
+    const ns = maxDim > 0 ? 1.0 / maxDim : 1;
+
     const targetDiam = wheelRadius * 2;
 
-    return positions.map(({ label, position, isRight }) => {
-      const clone = gltf.scene.clone(true);
+    // === Step 2: Clone for each wheel position ===
+    const result = positions.map(({ label, position, isRight }) => {
+      const clone = template.clone(true);
 
-      // Force tire materials to black rubber, keep rim metallic
+      // Force tire materials to black rubber
       let foundTire = false;
       clone.traverse((child) => {
         if (!child.isMesh || !child.material) return;
         const matName = (child.material.name || child.name || '').toLowerCase();
         const isTire = matName.includes('tire') || matName.includes('tyre') ||
-          matName.includes('rubber') || matName.includes('pneu');
+          matName.includes('rubber') || matName.includes('pneu') ||
+          matName.includes('sidewall') || matName.includes('thread');
         if (isTire) {
           child.material = new THREE.MeshStandardMaterial({
             color: 0x111111, roughness: 0.9, metalness: 0.0,
@@ -155,8 +244,6 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
           foundTire = true;
         }
       });
-      // If no tire material detected by name (single-material models),
-      // darken the whole wheel to a dark alloy look
       if (!foundTire) {
         clone.traverse((child) => {
           if (!child.isMesh || !child.material) return;
@@ -170,6 +257,8 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
       wrapper.add(clone);
       return { label, position, isRight, group: wrapper, targetDiam };
     });
+
+    return { wheels: result, normScale: ns };
   }, [gltf.scene, positions, wheelRadius]);
 
   if (wheels.length === 0) return null;
@@ -177,7 +266,7 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
   return (
     <group>
       {wheels.map(({ label, position, isRight, group, targetDiam }) => {
-        const s = targetDiam * carScale;
+        const s = targetDiam * carScale * normScale;
         return (
           <primitive
             key={label}
@@ -275,7 +364,7 @@ function GlbModel({ modelPath }) {
 
     // Estimate wheel layout from car bounding box
     wheelData.current.hasWheels = detectedWheelMeshes.length > 0;
-    const layout = estimateWheelLayout(totalBox);
+    const layout = detectWheelPositions(detectedWheelMeshes, totalBox);
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = layout.wheelRadius;
 
