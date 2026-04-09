@@ -55,11 +55,18 @@ function detectWheelPositions(wheelMeshes, carBox) {
     return { center: c, radius, sizeY: s.y };
   });
 
-  // Group by quadrant
+  // Auto-detect orientation: longest horizontal axis = front/rear (length)
+  const isXLong = carSize.x > carSize.z;
+
+  // Group by quadrant (adapts to model orientation)
   const groups = { FL: [], FR: [], RL: [], RR: [] };
   for (const info of infos) {
-    const isRight = info.center.x > carCenter.x;
-    const isFront = info.center.z > carCenter.z;
+    const isRight = isXLong
+      ? info.center.z > carCenter.z   // width along Z when X is length
+      : info.center.x > carCenter.x;  // width along X when Z is length
+    const isFront = isXLong
+      ? info.center.x > carCenter.x   // length along X
+      : info.center.z > carCenter.z;  // length along Z
     const key = (isFront ? 'F' : 'R') + (isRight ? 'R' : 'L');
     groups[key].push(info);
   }
@@ -113,15 +120,32 @@ function detectWheelPositions(wheelMeshes, carBox) {
 function fallbackWheelLayout(carCenter, carSize, carBox) {
   const wheelRadius = carSize.y * 0.175;
   const wheelY = carBox.min.y + wheelRadius;
-  const xOffset = carSize.x * 0.43;
-  const zFront = carCenter.z + carSize.z * 0.32;
-  const zRear = carCenter.z - carSize.z * 0.32;
+
+  // Auto-detect orientation: the car's length (front-rear) is the longest horizontal axis
+  const isXLong = carSize.x > carSize.z;
+  // lengthAxis = front/rear, widthAxis = left/right
+  const lengthSize = isXLong ? carSize.x : carSize.z;
+  const widthSize = isXLong ? carSize.z : carSize.x;
+  const lengthCenter = isXLong ? carCenter.x : carCenter.z;
+  const widthCenter = isXLong ? carCenter.z : carCenter.x;
+
+  const widthOffset = widthSize * 0.43;
+  const lengthFront = lengthCenter + lengthSize * 0.32;
+  const lengthRear = lengthCenter - lengthSize * 0.32;
+
+  function pos(wSide, lPos) {
+    const w = widthCenter + wSide * widthOffset;
+    return isXLong
+      ? new THREE.Vector3(lPos, wheelY, w)
+      : new THREE.Vector3(w, wheelY, lPos);
+  }
+
   return {
     positions: [
-      { label: 'FL', position: new THREE.Vector3(carCenter.x - xOffset, wheelY, zFront), isRight: false },
-      { label: 'FR', position: new THREE.Vector3(carCenter.x + xOffset, wheelY, zFront), isRight: true },
-      { label: 'RL', position: new THREE.Vector3(carCenter.x - xOffset, wheelY, zRear), isRight: false },
-      { label: 'RR', position: new THREE.Vector3(carCenter.x + xOffset, wheelY, zRear), isRight: true },
+      { label: 'FL', position: pos(-1, lengthFront), isRight: false },
+      { label: 'FR', position: pos(+1, lengthFront), isRight: true },
+      { label: 'RL', position: pos(-1, lengthRear), isRight: false },
+      { label: 'RR', position: pos(+1, lengthRear), isRight: true },
     ],
     wheelRadius,
   };
@@ -210,7 +234,7 @@ function PlaceholderCar() {
 //   outer group: position + scale (wheel location + size)
 //     inner group: centering offset + axle rotation
 //       primitive: raw GLB clone
-function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
+function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLong }) {
   const gltf = useGLTF(wheelPath);
 
   const info = useMemo(() => {
@@ -223,12 +247,19 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
     wBox.getCenter(wCenter);
     wBox.getSize(wSize);
 
-    // Detect axle (thinnest dimension) and compute rotation to align to X
+    // Detect axle (thinnest dimension) and compute rotation
+    // For Z-long cars: axle should be along X
+    // For X-long cars: axle should be along Z
     const dims = [wSize.x, wSize.y, wSize.z];
     const minIdx = dims.indexOf(Math.min(...dims));
+    const targetAxle = isXLong ? 2 : 0; // Z-axis for X-long, X-axis for Z-long
     const axleRot = [0, 0, 0];
-    if (minIdx === 1) axleRot[2] = Math.PI / 2;      // Y→X
-    else if (minIdx === 2) axleRot[1] = Math.PI / 2;  // Z→X
+    if (minIdx !== targetAxle) {
+      if (minIdx === 0 && targetAxle === 2) axleRot[1] = Math.PI / 2;  // X→Z
+      else if (minIdx === 1 && targetAxle === 0) axleRot[2] = Math.PI / 2;  // Y→X
+      else if (minIdx === 1 && targetAxle === 2) axleRot[0] = Math.PI / 2;  // Y→Z
+      else if (minIdx === 2 && targetAxle === 0) axleRot[1] = Math.PI / 2;  // Z→X
+    }
 
     const maxDim = Math.max(wSize.x, wSize.y, wSize.z);
     const normScale = maxDim > 0 ? 1.0 / maxDim : 1;
@@ -278,7 +309,11 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
         const py = position.y * carScale + yOffset;
         const pz = position.z * carScale;
         return (
-          <group key={label} position={[px, py, pz]} scale={[s * (isRight ? -1 : 1), s, s]}>
+          <group key={label} position={[px, py, pz]}
+            scale={isXLong
+              ? [s, s, s * (isRight ? -1 : 1)]   // X-long: axle along Z, flip Z
+              : [s * (isRight ? -1 : 1), s, s]}   // Z-long: axle along X, flip X
+          >
             <group rotation={axleRot}>
               <group position={[-wCenter.x, -wCenter.y, -wCenter.z]}>
                 <primitive object={scene} />
@@ -380,24 +415,29 @@ function GlbModel({ modelPath }) {
 
     wheelData.current.hasWheels = detectedWheelMeshes.length > 0;
 
+    const carSizeVec = new THREE.Vector3();
+    totalBox.getSize(carSizeVec);
+    const isXLong = carSizeVec.x > carSizeVec.z;
+
     // Use TIRE meshes for positioning (most accurate — centered on hub)
     const positionMeshes = tireMeshes.length >= 2 ? tireMeshes : detectedWheelMeshes;
     let layout = detectWheelPositions(positionMeshes, totalBox);
 
-    // Sanity checks — fall back if positions are unreliable
-    const carSizeVec = new THREE.Vector3();
-    totalBox.getSize(carSizeVec);
-    const xVals = layout.positions.map(p => p.position.x);
-    const xSpread = xVals.length > 1 ? Math.max(...xVals) - Math.min(...xVals) : 0;
+    // Sanity checks — width axis spread must be significant
+    const widthAxis = isXLong ? 'z' : 'x';
+    const widthSize = isXLong ? carSizeVec.z : carSizeVec.x;
+    const wVals = layout.positions.map(p => p.position[widthAxis]);
+    const wSpread = wVals.length > 1 ? Math.max(...wVals) - Math.min(...wVals) : 0;
     const needsFallback = layout.positions.length < 4 ||
       layout.wheelRadius > carSizeVec.y * 0.35 ||
-      xSpread < carSizeVec.x * 0.3; // all clustered at center X
+      wSpread < widthSize * 0.3;
     if (needsFallback) {
       layout = fallbackWheelLayout(center, carSizeVec, totalBox);
     }
 
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = layout.wheelRadius;
+    wheelData.current.isXLong = isXLong;
 
 
   }, [clonedScene]);
@@ -580,6 +620,7 @@ function GlbModel({ modelPath }) {
             carScale={scale}
             yOffset={yOffset}
             wheelRadius={wheelRadius}
+            isXLong={wheelData.current.isXLong}
           />
         </Suspense>
       )}
