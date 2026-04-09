@@ -22,8 +22,8 @@ const BLOCKER_RE = /blocking|blocker|occluder|int_block|seat|leather|steering|st
 const OVERLAY_RE = /ext_gloss|ext_matte|ext_light|clear.?coat|finish_overlay|coat_shad/i;
 
 function isWheelMesh(meshName, matName) {
-  // Check exclude against mesh name only (material names can be shared)
-  if (WHEEL_EXCLUDE_RE.test(meshName)) return false;
+  // Check exclude against both mesh and material names
+  if (WHEEL_EXCLUDE_RE.test(meshName) || WHEEL_EXCLUDE_RE.test(matName)) return false;
   // Check positive match against combined name
   const combined = meshName + ' ' + matName;
   return WHEEL_RE.test(combined);
@@ -269,6 +269,7 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius }) {
 
   const { wCenter, normScale, targetDiam, axleRot } = info;
 
+
   return (
     <group>
       {info.wheels.map(({ label, position, isRight, scene }) => {
@@ -374,32 +375,8 @@ function GlbModel({ modelPath }) {
       }
     });
 
-    // Expand wheel detection: find ALL meshes near detected wheel meshes.
-    // This catches hub caps, spokes, brake discs etc. that share the same
-    // physical space but have non-wheel material names (e.g. "full_black").
-    if (detectedWheelMeshes.length > 0) {
-      const wheelBoxes = detectedWheelMeshes.map(m => {
-        const b = new THREE.Box3().setFromObject(m);
-        b.expandByScalar(b.getSize(new THREE.Vector3()).length() * 0.15);
-        return b;
-      });
-      const detectedUUIDs = new Set(detectedWheelMeshes.map(m => m.uuid));
-
-      clonedScene.traverse((child) => {
-        if (!child.isMesh || detectedUUIDs.has(child.uuid)) return;
-        const orig = originals.current.get(child.uuid);
-        if (!orig || orig.isWindow) return;
-        const meshCenter = new THREE.Vector3();
-        new THREE.Box3().setFromObject(child).getCenter(meshCenter);
-        for (const wb of wheelBoxes) {
-          if (wb.containsPoint(meshCenter)) {
-            orig.isWheel = true;
-            detectedWheelMeshes.push(child);
-            break;
-          }
-        }
-      });
-    }
+    // Note: proximity expansion was removed because it caught too many
+    // body panels near wheel wells, causing them to be hidden incorrectly.
 
     wheelData.current.hasWheels = detectedWheelMeshes.length > 0;
 
