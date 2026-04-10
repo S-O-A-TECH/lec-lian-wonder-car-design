@@ -302,22 +302,31 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
     const normScale = maxDim > 0 ? 1.0 / maxDim : 1;
     const targetDiam = wheelRadius * 2;
 
-    // Step 6: create materials
-    const hasTire = bakedMeshes.some(m => m.isTire);
-    const tireMat = new THREE.MeshStandardMaterial({
-      color: 0x111111, roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide,
+    // Log vertex counts and bounding details for each baked mesh
+    const meshDetails = bakedMeshes.map((bm, i) => {
+      const pos = bm.geometry.getAttribute('position');
+      const verts = pos ? pos.count : 0;
+      bm.geometry.computeBoundingBox();
+      const bs = new THREE.Vector3();
+      bm.geometry.boundingBox.getSize(bs);
+      return 'm' + i + ':v=' + verts + ',s=' + bs.x.toFixed(2) + '/' + bs.y.toFixed(2) + '/' + bs.z.toFixed(2);
     });
-    const rimMat = new THREE.MeshStandardMaterial({
-      color: hasTire ? 0x888888 : 0x444444,
-      roughness: 0.3, metalness: 0.8, side: THREE.DoubleSide,
+    console.log('[WS]', wheelPath.replace(/^.*\//,''),
+      'axle:', minIdx === targetAxle ? 'OK' : minIdx+'→'+targetAxle,
+      'totalSize:', wSize.x.toFixed(2), wSize.y.toFixed(2), wSize.z.toFixed(2),
+      meshDetails.join(' '));
+
+    // Step 6: create unified material — all wheel parts visible metallic
+    const wheelMat = new THREE.MeshStandardMaterial({
+      color: 0x999999, roughness: 0.25, metalness: 0.85, side: THREE.DoubleSide,
     });
 
-    return { bakedMeshes, normScale, targetDiam, tireMat, rimMat };
+    return { bakedMeshes, normScale, targetDiam, wheelMat };
   }, [gltf.scene, positions, wheelRadius, isXLong]);
 
   if (!wheelMeshes) return null;
 
-  const { bakedMeshes, normScale, targetDiam, tireMat, rimMat } = wheelMeshes;
+  const { bakedMeshes, normScale, targetDiam, wheelMat } = wheelMeshes;
 
   return (
     <group>
@@ -332,7 +341,7 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
         return (
           <group key={label} position={[px, py, pz]} scale={[sx, s, sz]}>
             {bakedMeshes.map((bm, mi) => (
-              <mesh key={mi} geometry={bm.geometry} material={bm.isTire ? tireMat : rimMat} />
+              <mesh key={mi} geometry={bm.geometry} material={wheelMat} />
             ))}
           </group>
         );
