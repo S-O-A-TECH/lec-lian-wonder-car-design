@@ -22,9 +22,10 @@ const BLOCKER_RE = /blocking|blocker|occluder|int_block|seat|leather|steering|st
 const OVERLAY_RE = /ext_gloss|ext_matte|ext_light|clear.?coat|finish_overlay|coat_shad/i;
 
 function isWheelMesh(meshName, matName) {
-  // Strong positive: mesh name explicitly contains "Wheel" → always a wheel part
-  // This overrides excludes (e.g. "TR.DEF-Wheel.Ft.R_mirror" is a wheel mirror cap)
-  if (/Wheel/i.test(meshName) && !/steering/i.test(meshName)) return true;
+  // Strong positive: mesh name has "Wheel" followed by separator (Wheel_, Wheel.)
+  // but NOT "WheelArch", "WheelHouse", "WheelWell", "WheelGuard"
+  if (/Wheel[_.\s-]/i.test(meshName) &&
+      !/steering|arch|house|well|guard|liner|fender|cover/i.test(meshName)) return true;
   // Check exclude against both mesh and material names
   if (WHEEL_EXCLUDE_RE.test(meshName) || WHEEL_EXCLUDE_RE.test(matName)) return false;
   // Check positive match against combined name
@@ -457,8 +458,21 @@ function GlbModel({ modelPath }) {
       layout = fallbackWheelLayout(center, carSizeVec, totalBox);
     }
 
+    // If too many meshes detected as wheels (>30% of total), detection is broken.
+    // Reset to avoid hiding the entire car body.
+    let totalMeshCount = 0;
+    clonedScene.traverse(c => { if (c.isMesh) totalMeshCount++; });
+    if (detectedWheelMeshes.length > Math.max(totalMeshCount * 0.20, 80)) {
+      // Too many — clear wheel detection, rely on fallback positions only
+      detectedWheelMeshes.forEach(m => {
+        const orig = originals.current.get(m.uuid);
+        if (orig) orig.isWheel = false;
+      });
+      detectedWheelMeshes.length = 0;
+      tireMeshes.length = 0;
+    }
+
     // Compute radius from ALL wheel assembly meshes (not just tires).
-    // This matches the original visual wheel size including rims/brakes.
     let assemblyRadius = layout.wheelRadius;
     if (detectedWheelMeshes.length >= 4) {
       const allWheelLayout = detectWheelPositions(detectedWheelMeshes, totalBox);
@@ -466,8 +480,11 @@ function GlbModel({ modelPath }) {
         assemblyRadius = allWheelLayout.wheelRadius;
       }
     }
-    const maxRadius = carSizeVec.y * 0.35;
-    const finalRadius = Math.min(assemblyRadius, maxRadius);
+
+    // Sanity: radius must be 5-30% of car height. Otherwise use fallback.
+    const fallbackRadius = carSizeVec.y * 0.175;
+    const ratio = carSizeVec.y > 0 ? assemblyRadius / carSizeVec.y : 0;
+    let finalRadius = (ratio >= 0.05 && ratio <= 0.30) ? assemblyRadius : fallbackRadius;
 
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = finalRadius;
@@ -607,8 +624,9 @@ function GlbModel({ modelPath }) {
       }
     });
 
-    // Update wheel positions for WheelSet
-    if (hasCustomWheels && wheelData.current.hasWheels) {
+    // Update wheel positions for WheelSet — always provide positions
+    // (fallback positions are used when no wheel meshes detected)
+    if (hasCustomWheels && wheelData.current.positions.length > 0) {
       setWheelPositions(wheelData.current.positions);
       setWheelRadius(wheelData.current.radius);
     } else {
