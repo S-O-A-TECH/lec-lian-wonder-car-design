@@ -479,11 +479,11 @@ function GlbModel({ modelPath }) {
       layout = detectWheelPositions(detectedWheelMeshes, totalBox);
     }
 
-    // If still <4 groups, disable wheel replacement for this model.
-    // Fallback estimation produces wrong positions — better to show nothing.
+    // If still <4 groups, use fallback positions.
+    // hasWheels stays as-is: true = can hide originals, false = overlay only.
     const needsFallback = layout.positions.length < 4;
     if (needsFallback) {
-      wheelData.current.hasWheels = false;
+      layout = fallbackWheelLayout(center, carSizeVec, totalBox);
     }
 
     // If too many meshes detected as wheels (>30% of total), detection is broken.
@@ -691,7 +691,10 @@ function GlbModel({ modelPath }) {
     // Only show custom wheels when we CAN hide originals (wheel meshes detected).
     // Models with no detectable wheel meshes can't support wheel replacement
     // — showing custom wheels would overlap with visible originals.
-    if (hasCustomWheels && wheelData.current.hasWheels && wheelData.current.positions.length > 0) {
+    // Always show custom wheels when positions are available.
+    // For models without detectable wheel meshes (hasWheels=false),
+    // originals stay visible but custom wheels overlay on top.
+    if (hasCustomWheels && wheelData.current.positions.length > 0) {
       setWheelPositions(wheelData.current.positions);
       setWheelRadius(wheelData.current.radius);
     } else {
