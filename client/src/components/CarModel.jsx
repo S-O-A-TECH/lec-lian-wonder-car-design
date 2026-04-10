@@ -472,19 +472,15 @@ function GlbModel({ modelPath }) {
       tireMeshes.length = 0;
     }
 
-    // Compute radius from ALL wheel assembly meshes (not just tires).
-    let assemblyRadius = layout.wheelRadius;
-    if (detectedWheelMeshes.length >= 4) {
-      const allWheelLayout = detectWheelPositions(detectedWheelMeshes, totalBox);
-      if (allWheelLayout.positions.length >= 4) {
-        assemblyRadius = allWheelLayout.wheelRadius;
-      }
-    }
+    // Use the larger of (tire-detected radius, fallback radius).
+    // This ensures wheels are never too small while remaining proportional.
+    const fallbackRadius = carSizeVec.y * 0.22;
+    const tireRadius = layout.wheelRadius;
+    let finalRadius = Math.max(tireRadius, fallbackRadius);
 
-    // Sanity: radius must be 5-30% of car height. Otherwise use fallback.
-    const fallbackRadius = carSizeVec.y * 0.175;
-    const ratio = carSizeVec.y > 0 ? assemblyRadius / carSizeVec.y : 0;
-    let finalRadius = (ratio >= 0.05 && ratio <= 0.30) ? assemblyRadius : fallbackRadius;
+    // Safety cap: never exceed 30% of car height
+    const maxRadius = carSizeVec.y * 0.30;
+    if (finalRadius > maxRadius) finalRadius = fallbackRadius;
 
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = finalRadius;
