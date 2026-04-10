@@ -133,6 +133,22 @@ function detectWheelPositions(wheelMeshes, carBox) {
     }
   }
 
+  // Fix: if left/right wheels are at the same position (combined tire meshes),
+  // spread them using car width
+  const widthAxis = isXLong ? 'z' : 'x';
+  const widthCenter = isXLong ? carCenter.z : carCenter.x;
+  const widthSize = isXLong ? carSize.z : carSize.x;
+  const wValues = positions.map(p => p.position[widthAxis]);
+  const wSpread = wValues.length > 1 ? Math.max(...wValues) - Math.min(...wValues) : 0;
+  if (wSpread < widthSize * 0.1) {
+    // Left/right not separated — apply track width from car dimensions
+    const halfTrack = widthSize * 0.40;
+    for (const p of positions) {
+      if (p.isRight) p.position[widthAxis] = widthCenter + halfTrack;
+      else p.position[widthAxis] = widthCenter - halfTrack;
+    }
+  }
+
   return { positions, wheelRadius: avgRadius };
 }
 
@@ -292,10 +308,11 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
       bm.geometry.translate(-wCenter.x, -wCenter.y, -wCenter.z);
     }
 
-    // Step 4: detect axle and rotate if needed
+    // Step 4: detect axle and rotate to X (always X, regardless of car orientation)
+    // The flip for isXLong is handled in JSX scale, not geometry rotation.
     const dims = [wSize.x, wSize.y, wSize.z];
     const minIdx = dims.indexOf(Math.min(...dims));
-    const targetAxle = isXLong ? 2 : 0;
+    const targetAxle = 0; // Always X
     if (minIdx !== targetAxle) {
       const rotMat = new THREE.Matrix4();
       if (minIdx === 0 && targetAxle === 2) rotMat.makeRotationY(Math.PI / 2);
@@ -317,20 +334,6 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
     const normScale = maxDim > 0 ? 1.0 / maxDim : 1;
     const targetDiam = wheelRadius * 2;
 
-    // Log vertex counts and bounding details for each baked mesh
-    const meshDetails = bakedMeshes.map((bm, i) => {
-      const pos = bm.geometry.getAttribute('position');
-      const verts = pos ? pos.count : 0;
-      bm.geometry.computeBoundingBox();
-      const bs = new THREE.Vector3();
-      bm.geometry.boundingBox.getSize(bs);
-      return 'm' + i + ':v=' + verts + ',s=' + bs.x.toFixed(2) + '/' + bs.y.toFixed(2) + '/' + bs.z.toFixed(2);
-    });
-    console.log('[WS]', wheelPath.replace(/^.*\//,''),
-      'axle:', minIdx === targetAxle ? 'OK' : minIdx+'→'+targetAxle,
-      'totalSize:', wSize.x.toFixed(2), wSize.y.toFixed(2), wSize.z.toFixed(2),
-      meshDetails.join(' '));
-
     // Step 6: create unified material — all wheel parts visible metallic
     const wheelMat = new THREE.MeshStandardMaterial({
       color: 0x999999, roughness: 0.25, metalness: 0.85, side: THREE.DoubleSide,
@@ -351,8 +354,9 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
         const px = position.x * carScale;
         const py = position.y * carScale + yOffset;
         const pz = position.z * carScale;
-        const sx = isXLong ? s : s * flip;
-        const sz = isXLong ? s * flip : s;
+        // Always flip on X axis (axle is always baked to X)
+        const sx = s * flip;
+        const sz = s;
         return (
           <group key={label} position={[px, py, pz]} scale={[sx, s, sz]}>
             {bakedMeshes.map((bm, mi) => (
@@ -545,11 +549,6 @@ function GlbModel({ modelPath }) {
       return p.label + ':d=' + dist.toFixed(3) +
         '(dx=' + dx.toFixed(3) + ',dy=' + dy.toFixed(3) + ',dz=' + dz.toFixed(3) + ')';
     });
-    console.log('[VERIFY]', mn, 'r:', finalRadius.toFixed(3),
-      '%diam:', (finalRadius/carSizeVec.y*200).toFixed(0) + '%',
-      'fb:', needsFallback,
-      verification.join(' | '));
-
     // Expose for external testing
     window.__wheelVerify = { model: mn, origCenters: origWheelCenters,
       customPositions: layout.positions.map(p => ({ label: p.label, x: p.position.x, y: p.position.y, z: p.position.z })),
