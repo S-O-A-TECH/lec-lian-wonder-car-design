@@ -22,6 +22,9 @@ const BLOCKER_RE = /blocking|blocker|occluder|int_block|seat|leather|steering|st
 const OVERLAY_RE = /ext_gloss|ext_matte|ext_light|clear.?coat|finish_overlay|coat_shad/i;
 
 function isWheelMesh(meshName, matName) {
+  // Strong positive: mesh name explicitly contains "Wheel" → always a wheel part
+  // This overrides excludes (e.g. "TR.DEF-Wheel.Ft.R_mirror" is a wheel mirror cap)
+  if (/Wheel/i.test(meshName) && !/steering/i.test(meshName)) return true;
   // Check exclude against both mesh and material names
   if (WHEEL_EXCLUDE_RE.test(meshName) || WHEEL_EXCLUDE_RE.test(matName)) return false;
   // Check positive match against combined name
@@ -454,12 +457,20 @@ function GlbModel({ modelPath }) {
       layout = fallbackWheelLayout(center, carSizeVec, totalBox);
     }
 
-    // Always use car-height-proportional radius (universal, consistent)
-    // carHeight * 0.14 gives 28% height/diameter ratio.
-    const universalRadius = carSizeVec.y * 0.14;
+    // Compute radius from ALL wheel assembly meshes (not just tires).
+    // This matches the original visual wheel size including rims/brakes.
+    let assemblyRadius = layout.wheelRadius;
+    if (detectedWheelMeshes.length >= 4) {
+      const allWheelLayout = detectWheelPositions(detectedWheelMeshes, totalBox);
+      if (allWheelLayout.positions.length >= 4) {
+        assemblyRadius = allWheelLayout.wheelRadius;
+      }
+    }
+    const maxRadius = carSizeVec.y * 0.35;
+    const finalRadius = Math.min(assemblyRadius, maxRadius);
 
     wheelData.current.positions = layout.positions;
-    wheelData.current.radius = universalRadius;
+    wheelData.current.radius = finalRadius;
     wheelData.current.isXLong = isXLong;
 
     // Restore scale/position so R3F rendering and CameraFitter work correctly
