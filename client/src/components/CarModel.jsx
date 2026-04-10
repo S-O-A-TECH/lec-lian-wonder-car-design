@@ -688,9 +688,10 @@ function GlbModel({ modelPath }) {
       }
     });
 
-    // Update wheel positions for WheelSet — always provide positions
-    // (fallback positions are used when no wheel meshes detected)
-    if (hasCustomWheels && wheelData.current.positions.length > 0) {
+    // Only show custom wheels when we CAN hide originals (wheel meshes detected).
+    // Models with no detectable wheel meshes can't support wheel replacement
+    // — showing custom wheels would overlap with visible originals.
+    if (hasCustomWheels && wheelData.current.hasWheels && wheelData.current.positions.length > 0) {
       setWheelPositions(wheelData.current.positions);
       setWheelRadius(wheelData.current.radius);
     } else {
