@@ -54,8 +54,8 @@ function detectWheelPositions(wheelMeshes, carBox) {
     const s = new THREE.Vector3();
     box.getCenter(c);
     box.getSize(s);
-    // Radius: half of the max of Y and Z dimensions (X is axle width)
-    const radius = Math.max(s.y, s.z) / 2;
+    // Radius: half of the largest dimension (works for any axle orientation)
+    const radius = Math.max(s.x, s.y, s.z) / 2;
     return { center: c, radius, sizeY: s.y };
   });
 
@@ -446,14 +446,9 @@ function GlbModel({ modelPath }) {
     const positionMeshes = tireMeshes.length >= 2 ? tireMeshes : detectedWheelMeshes;
     let layout = detectWheelPositions(positionMeshes, totalBox);
 
-    // Sanity checks — width axis spread must be significant
-    const widthAxis = isXLong ? 'z' : 'x';
-    const widthSize = isXLong ? carSizeVec.z : carSizeVec.x;
-    const wVals = layout.positions.map(p => p.position[widthAxis]);
-    const wSpread = wVals.length > 1 ? Math.max(...wVals) - Math.min(...wVals) : 0;
-    const needsFallback = layout.positions.length < 4 ||
-      layout.wheelRadius > carSizeVec.y * 0.35 ||
-      wSpread < widthSize * 0.3;
+    // Only use fallback when detection gave fewer than 4 groups.
+    // Width spread check was removed — it false-rejected narrow-track cars (McLaren 720S).
+    const needsFallback = layout.positions.length < 4;
     if (needsFallback) {
       layout = fallbackWheelLayout(center, carSizeVec, totalBox);
     }
@@ -474,7 +469,7 @@ function GlbModel({ modelPath }) {
 
     // Use the larger of (tire-detected radius, fallback radius).
     // This ensures wheels are never too small while remaining proportional.
-    const fallbackRadius = carSizeVec.y * 0.22;
+    const fallbackRadius = carSizeVec.y * 0.275;
     const tireRadius = layout.wheelRadius;
     let finalRadius = Math.max(tireRadius, fallbackRadius);
 
@@ -485,6 +480,51 @@ function GlbModel({ modelPath }) {
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = finalRadius;
     wheelData.current.isXLong = isXLong;
+
+    // === VERIFICATION SYSTEM ===
+    // Record ORIGINAL wheel mesh centers per quadrant for comparison
+    // with custom wheel positions. Exposed via window for testing.
+    const origWheelCenters = {};
+    if (detectedWheelMeshes.length > 0) {
+      const groups = { FL: [], FR: [], RL: [], RR: [] };
+      for (const m of detectedWheelMeshes) {
+        const b = new THREE.Box3().setFromObject(m);
+        const c = new THREE.Vector3();
+        b.getCenter(c);
+        const isR = isXLong ? c.z > center.z : c.x > center.x;
+        const isF = isXLong ? c.x > center.x : c.z > center.z;
+        groups[(isF?'F':'R')+(isR?'R':'L')].push(c);
+      }
+      for (const [label, pts] of Object.entries(groups)) {
+        if (pts.length === 0) continue;
+        const avg = new THREE.Vector3();
+        pts.forEach(p => avg.add(p));
+        avg.divideScalar(pts.length);
+        origWheelCenters[label] = { x: avg.x, y: avg.y, z: avg.z };
+      }
+    }
+
+    // Compare: custom wheel positions vs original wheel centers
+    const mn = modelPath.replace(/^.*\//, '').replace('.glb', '');
+    const verification = layout.positions.map(p => {
+      const orig = origWheelCenters[p.label];
+      if (!orig) return p.label + ':NO_ORIG';
+      const dx = p.position.x - orig.x;
+      const dy = p.position.y - orig.y;
+      const dz = p.position.z - orig.z;
+      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      return p.label + ':d=' + dist.toFixed(3) +
+        '(dx=' + dx.toFixed(3) + ',dy=' + dy.toFixed(3) + ',dz=' + dz.toFixed(3) + ')';
+    });
+    console.log('[VERIFY]', mn, 'r:', finalRadius.toFixed(3),
+      '%diam:', (finalRadius/carSizeVec.y*200).toFixed(0) + '%',
+      'fb:', needsFallback,
+      verification.join(' | '));
+
+    // Expose for external testing
+    window.__wheelVerify = { model: mn, origCenters: origWheelCenters,
+      customPositions: layout.positions.map(p => ({ label: p.label, x: p.position.x, y: p.position.y, z: p.position.z })),
+      radius: finalRadius, carHeight: carSizeVec.y };
 
     // Restore scale/position so R3F rendering and CameraFitter work correctly
     clonedScene.scale.copy(savedScale);
