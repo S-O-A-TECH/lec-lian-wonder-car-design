@@ -475,10 +475,11 @@ function GlbModel({ modelPath }) {
       layout = detectWheelPositions(detectedWheelMeshes, totalBox);
     }
 
-    // Last resort: fallback estimation
+    // If still <4 groups, disable wheel replacement for this model.
+    // Fallback estimation produces wrong positions — better to show nothing.
     const needsFallback = layout.positions.length < 4;
     if (needsFallback) {
-      layout = fallbackWheelLayout(center, carSizeVec, totalBox);
+      wheelData.current.hasWheels = false;
     }
 
     // If too many meshes detected as wheels (>30% of total), detection is broken.
