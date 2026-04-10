@@ -62,17 +62,32 @@ function detectWheelPositions(wheelMeshes, carBox) {
   // Auto-detect orientation: longest horizontal axis = front/rear (length)
   const isXLong = carSize.x > carSize.z;
 
-  // Group by quadrant (adapts to model orientation)
-  const groups = { FL: [], FR: [], RL: [], RR: [] };
-  for (const info of infos) {
-    const isRight = isXLong
-      ? info.center.z > carCenter.z   // width along Z when X is length
-      : info.center.x > carCenter.x;  // width along X when Z is length
-    const isFront = isXLong
-      ? info.center.x > carCenter.x   // length along X
-      : info.center.z > carCenter.z;  // length along Z
-    const key = (isFront ? 'F' : 'R') + (isRight ? 'R' : 'L');
-    groups[key].push(info);
+  // Group by quadrant — try carCenter first, then wheelPivot if <4 groups
+  function groupByPivot(pivot) {
+    const g = { FL: [], FR: [], RL: [], RR: [] };
+    for (const info of infos) {
+      const isRight = isXLong
+        ? info.center.z > pivot.z
+        : info.center.x > pivot.x;
+      const isFront = isXLong
+        ? info.center.x > pivot.x
+        : info.center.z > pivot.z;
+      g[(isFront ? 'F' : 'R') + (isRight ? 'R' : 'L')].push(info);
+    }
+    return g;
+  }
+
+  let groups = groupByPivot(carCenter);
+  const filledGroups = Object.values(groups).filter(g => g.length > 0).length;
+
+  // If carCenter grouping gives <4, try wheel-center pivot
+  if (filledGroups < 4 && infos.length >= 4) {
+    const wheelPivot = new THREE.Vector3();
+    infos.forEach(i => wheelPivot.add(i.center));
+    wheelPivot.divideScalar(infos.length);
+    const alt = groupByPivot(wheelPivot);
+    const altFilled = Object.values(alt).filter(g => g.length > 0).length;
+    if (altFilled > filledGroups) groups = alt;
   }
 
   const positions = [];
@@ -455,8 +470,12 @@ function GlbModel({ modelPath }) {
     const positionMeshes = tireMeshes.length >= 2 ? tireMeshes : detectedWheelMeshes;
     let layout = detectWheelPositions(positionMeshes, totalBox);
 
-    // Only use fallback when detection gave fewer than 4 groups.
-    // Width spread check was removed — it false-rejected narrow-track cars (McLaren 720S).
+    // If tire detection gave <4 groups, try ALL wheel meshes before fallback
+    if (layout.positions.length < 4 && positionMeshes !== detectedWheelMeshes && detectedWheelMeshes.length >= 4) {
+      layout = detectWheelPositions(detectedWheelMeshes, totalBox);
+    }
+
+    // Last resort: fallback estimation
     const needsFallback = layout.positions.length < 4;
     if (needsFallback) {
       layout = fallbackWheelLayout(center, carSizeVec, totalBox);
