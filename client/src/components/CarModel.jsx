@@ -11,9 +11,9 @@ const TARGET_SIZE = 4.5;
 // These cannot be auto-detected; positions measured from GLB analysis.
 const MANUAL_WHEEL_POS = {
   'porsche-911':     { fl:[-0.75,-0.30,1.27], fr:[0.75,-0.30,1.27], rl:[-0.75,-0.30,-1.17], rr:[0.75,-0.30,-1.17], r:0.33, hide:/^Cylinder/i },
-  'mclaren-720s':    { fl:[0.98,0.23,-0.53], fr:[0.98,0.23,0.53], rl:[-0.82,0.22,-0.53], rr:[-0.82,0.22,0.53], r:0.22, xlong:true, hide:/tyres|rims|brake_dic/i },
-  'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.128, hide:/Tyre_|Brake_|Wheel/i },
-  'lamborghini-aventador': { fl:[-0.89,0.00,1.44], fr:[0.89,0.00,1.44], rl:[-0.89,0.00,-1.52], rr:[0.89,0.00,-1.52], r:0.28 },
+  'mclaren-720s':    { fl:[0.98,0.23,-0.56], fr:[0.98,0.23,0.56], rl:[-0.82,0.22,-0.56], rr:[-0.82,0.22,0.56], r:0.22, xlong:true, hide:/tyres|rims|brake_dic/i },
+  'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.12, hide:/Tyre_|Brake_|Wheel/i },
+  // aventador: combined full-car tire meshes, wheel replacement not supported
   'bugatti-chiron':  { fl:[-1.11,0.40,1.49], fr:[1.11,0.40,1.49], rl:[-1.11,0.40,-1.54], rr:[1.11,0.40,-1.54], r:0.33, hide:/blur_rim|Brake|disc|hub|caliper|Tyre/i },
   'bugatti-veyron':  { fl:[-0.80,0.35,1.20], fr:[0.80,0.35,1.20], rl:[-0.80,0.35,-1.20], rr:[0.80,0.35,-1.20], r:0.35 },
 };
