@@ -461,8 +461,37 @@ function GlbModel({ modelPath }) {
       }
     });
 
-    // Note: proximity expansion was removed because it caught too many
-    // body panels near wheel wells, causing them to be hidden incorrectly.
+    // Geometric wheel detection: for models with NO name-based wheel detection,
+    // find circular meshes near the car bottom (likely wheels).
+    if (detectedWheelMeshes.length === 0) {
+      const carHeight = totalBox.max.y - totalBox.min.y;
+      const carBottom = totalBox.min.y;
+      clonedScene.traverse((child) => {
+        if (!child.isMesh) return;
+        const orig = originals.current.get(child.uuid);
+        if (!orig || orig.isWindow) return;
+        const box = new THREE.Box3().setFromObject(child);
+        const s = new THREE.Vector3();
+        const c = new THREE.Vector3();
+        box.getSize(s);
+        box.getCenter(c);
+        // Circular: two largest dims similar (ratio > 0.7), third much smaller
+        const sorted = [s.x, s.y, s.z].sort((a, b) => b - a);
+        const isCircular = sorted[0] > 0 && sorted[1] / sorted[0] > 0.7 && sorted[2] / sorted[0] < 0.5;
+        // Near bottom: center Y within lower 40% of car
+        const isLow = c.y < carBottom + carHeight * 0.4;
+        // Small relative to car: max dim < 40% of car height
+        const isSmall = sorted[0] < carHeight * 0.4;
+        if (isCircular && isLow && isSmall) {
+          orig.isWheel = true;
+          detectedWheelMeshes.push(child);
+          const combined = (child.material?.name || '') + ' ' + (child.name || '');
+          if (TIRE_RE.test(combined) || sorted[1] / sorted[0] > 0.9) {
+            tireMeshes.push(child);
+          }
+        }
+      });
+    }
 
     wheelData.current.hasWheels = detectedWheelMeshes.length > 0;
 
