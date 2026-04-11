@@ -47,16 +47,15 @@ function detectWheelPositions(wheelMeshes, carBox) {
     return fallbackWheelLayout(carCenter, carSize, carBox);
   }
 
-  // Compute bounding box per wheel mesh
+  // Compute bounding box per wheel mesh (keep min/max for spread fix)
   const infos = wheelMeshes.map(mesh => {
     const box = new THREE.Box3().setFromObject(mesh);
     const c = new THREE.Vector3();
     const s = new THREE.Vector3();
     box.getCenter(c);
     box.getSize(s);
-    // Radius: half of the largest dimension (works for any axle orientation)
     const radius = Math.max(s.x, s.y, s.z) / 2;
-    return { center: c, radius, sizeY: s.y };
+    return { center: c, radius, sizeY: s.y, boxMin: box.min.clone(), boxMax: box.max.clone() };
   });
 
   // Auto-detect orientation: longest horizontal axis = front/rear (length)
@@ -144,12 +143,27 @@ function detectWheelPositions(wheelMeshes, carBox) {
   let usedSpreadFix = false;
 
   if (wSpread < widthSize * 0.1 && positions.length >= 2) {
-    // Get front/rear length values (sorted)
+    // Combined L+R tire meshes: extract L/R positions from bounding box EDGES
+    // (min = left wheel center, max = right wheel center along width axis)
     const lengthVals = positions.map(p => p.position[lengthAxis]);
     const frontL = Math.max(...lengthVals);
     const rearL = Math.min(...lengthVals);
     const commonY = positions[0].position.y;
-    const halfTrack = widthSize * 0.30;
+
+    // Get actual L/R positions from tire mesh bounding box edges
+    // Each edge is where individual wheel center should be
+    let leftW = widthCenter, rightW = widthCenter;
+    for (const info of infos) {
+      const minW = info.boxMin[widthAxis];
+      const maxW = info.boxMax[widthAxis];
+      // The tire radius in the width direction tells us how far inside
+      // the edge the center is. But for combined meshes, the edges ARE
+      // approximately at the individual wheel centers.
+      if (minW < leftW) leftW = minW;
+      if (maxW > rightW) rightW = maxW;
+    }
+    // Offset inward by ~half tire width for center position
+    const tireHalfWidth = (infos[0] ? Math.min(infos[0].center.distanceTo(new THREE.Vector3(infos[0].boxMin.x, infos[0].center.y, infos[0].center.z)), Math.min(Math.abs(infos[0].boxMax[widthAxis] - infos[0].center[widthAxis]), Math.abs(infos[0].center[widthAxis] - infos[0].boxMin[widthAxis]))) : 0);
 
     // Rebuild 4 clean positions
     positions.length = 0;
@@ -160,10 +174,10 @@ function detectWheelPositions(wheelMeshes, carBox) {
       pos.y = commonY;
       return { label: lbl, position: pos, isRight: right };
     };
-    positions.push(makePos('FL', frontL, widthCenter - halfTrack, false));
-    positions.push(makePos('FR', frontL, widthCenter + halfTrack, true));
-    positions.push(makePos('RL', rearL, widthCenter - halfTrack, false));
-    positions.push(makePos('RR', rearL, widthCenter + halfTrack, true));
+    positions.push(makePos('FL', frontL, leftW, false));
+    positions.push(makePos('FR', frontL, rightW, true));
+    positions.push(makePos('RL', rearL, leftW, false));
+    positions.push(makePos('RR', rearL, rightW, true));
     usedSpreadFix = true;
   }
 
