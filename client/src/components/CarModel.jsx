@@ -12,10 +12,10 @@ const TARGET_SIZE = 4.5;
 const MANUAL_WHEEL_POS = {
   'porsche-911':     { fl:[-0.75,-0.30,1.27], fr:[0.75,-0.30,1.27], rl:[-0.75,-0.30,-1.17], rr:[0.75,-0.30,-1.17], r:0.33, hide:/^Cylinder/i },
   'mclaren-720s':    { fl:[0.98,0.23,-0.58], fr:[0.98,0.23,0.58], rl:[-0.82,0.22,-0.58], rr:[-0.82,0.22,0.58], r:0.22, xlong:true, hide:/tyres|rims|brake_dic/i },
-  'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.12, hide:/Tyre_|Brake_|Wheel/i },
+  'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.14, hide:/Tyre_|Brake_|Wheel/i },
   // aventador: combined full-car tire meshes, wheel replacement not supported
   'bugatti-chiron':  { fl:[-1.11,0.40,1.49], fr:[1.11,0.40,1.49], rl:[-1.11,0.40,-1.54], rr:[1.11,0.40,-1.54], r:0.33, hide:/blur_rim|Brake|disc|hub|caliper|Tyre/i },
-  'bugatti-veyron':  { fl:[-0.80,0.35,1.20], fr:[0.80,0.35,1.20], rl:[-0.80,0.35,-1.20], rr:[0.80,0.35,-1.20], r:0.35 },
+  // veyron & i7: replaced with new Sketchfab models, use auto-detect
 };
 
 // Detect if a mesh is part of a wheel assembly.
