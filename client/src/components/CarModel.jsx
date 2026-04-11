@@ -11,7 +11,7 @@ const TARGET_SIZE = 4.5;
 // These cannot be auto-detected; positions measured from GLB analysis.
 const MANUAL_WHEEL_POS = {
   'porsche-911':     { fl:[-0.75,-0.30,1.27], fr:[0.75,-0.30,1.27], rl:[-0.75,-0.30,-1.17], rr:[0.75,-0.30,-1.17], r:0.33, hide:/^Cylinder/i },
-  'mclaren-720s':    { fl:[0.98,0.23,-0.56], fr:[0.98,0.23,0.56], rl:[-0.82,0.22,-0.56], rr:[-0.82,0.22,0.56], r:0.22, xlong:true, hide:/tyres|rims|brake_dic/i },
+  'mclaren-720s':    { fl:[0.98,0.23,-0.58], fr:[0.98,0.23,0.58], rl:[-0.82,0.22,-0.58], rr:[-0.82,0.22,0.58], r:0.22, xlong:true, hide:/tyres|rims|brake_dic/i },
   'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.12, hide:/Tyre_|Brake_|Wheel/i },
   // aventador: combined full-car tire meshes, wheel replacement not supported
   'bugatti-chiron':  { fl:[-1.11,0.40,1.49], fr:[1.11,0.40,1.49], rl:[-1.11,0.40,-1.54], rr:[1.11,0.40,-1.54], r:0.33, hide:/blur_rim|Brake|disc|hub|caliper|Tyre/i },
@@ -574,15 +574,18 @@ function GlbModel({ modelPath }) {
       tireMeshes.length = 0;
     }
 
-    // Use the larger of (tire-detected radius, fallback radius).
-    // This ensures wheels are never too small while remaining proportional.
-    const fallbackRadius = carSizeVec.y * 0.275;
-    const tireRadius = layout.wheelRadius;
-    let finalRadius = Math.max(tireRadius, fallbackRadius);
-
-    // Safety cap: never exceed 30% of car height
-    const maxRadius = carSizeVec.y * 0.30;
-    if (finalRadius > maxRadius) finalRadius = fallbackRadius;
+    // For manual position models, use the exact specified radius.
+    // For auto-detected models, use max(tire, fallback) with safety cap.
+    let finalRadius;
+    if (manual) {
+      finalRadius = manual.r;
+    } else {
+      const fallbackRadius = carSizeVec.y * 0.275;
+      const tireRadius = layout.wheelRadius;
+      finalRadius = Math.max(tireRadius, fallbackRadius);
+      const maxRadius = carSizeVec.y * 0.30;
+      if (finalRadius > maxRadius) finalRadius = fallbackRadius;
+    }
 
     wheelData.current.positions = layout.positions;
     wheelData.current.radius = finalRadius;
