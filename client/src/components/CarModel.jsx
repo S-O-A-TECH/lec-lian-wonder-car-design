@@ -7,6 +7,17 @@ import { finishPresets, wheelPresets } from '../data/carCatalog';
 
 const TARGET_SIZE = 4.5;
 
+// Manual wheel positions for models with combined L+R tire meshes.
+// These cannot be auto-detected; positions measured from GLB analysis.
+const MANUAL_WHEEL_POS = {
+  'porsche-911':     { fl:[-0.75,-0.30,1.27], fr:[0.75,-0.30,1.27], rl:[-0.75,-0.30,-1.17], rr:[0.75,-0.30,-1.17], r:0.33 },
+  'mclaren-720s':    { fl:[0.98,0.23,-0.50], fr:[0.98,0.23,0.50], rl:[-0.82,0.22,-0.50], rr:[-0.82,0.22,0.50], r:0.22, xlong:true },
+  'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.15 },
+  'lamborghini-aventador': { fl:[-0.85,0.35,1.30], fr:[0.85,0.35,1.30], rl:[-0.85,0.35,-1.50], rr:[0.85,0.35,-1.50], r:0.35 },
+  'bugatti-chiron':  { fl:[-0.85,0.39,1.40], fr:[0.85,0.39,1.40], rl:[-0.85,0.39,-1.30], rr:[0.85,0.39,-1.30], r:0.40 },
+  'bugatti-veyron':  { fl:[-0.80,0.35,1.20], fr:[0.80,0.35,1.20], rl:[-0.80,0.35,-1.20], rr:[0.80,0.35,-1.20], r:0.35 },
+};
+
 // Detect if a mesh is part of a wheel assembly.
 // Uses (?:^|[^a-z]) before "rim" to prevent matching inside "trim"
 const WHEEL_RE = /(?:^|[^a-z])(?:wheel|rim)|tire|tyre|hub|brake|caliper|disc|disk|rotor|rubber|pneu|thread|sidewall/i;
@@ -142,13 +153,8 @@ function detectWheelPositions(wheelMeshes, carBox) {
   const wSpread = wValues.length > 1 ? Math.max(...wValues) - Math.min(...wValues) : 0;
   let usedSpreadFix = false;
 
-  if (wSpread < widthSize * 0.1 && positions.length >= 2) {
-    // Combined L+R tire meshes cannot provide accurate individual wheel positions.
-    // Rather than guessing and showing wrong results, disable wheel replacement
-    // for these models. The user sees original wheels which are always correct.
-    positions.length = 0;
-    usedSpreadFix = true;
-  }
+  // Combined L+R tire meshes: positions are unreliable.
+  // Will be overridden by MANUAL_WHEEL_POS in the calling code if available.
 
   return { positions, wheelRadius: avgRadius, usedSpreadFix };
 }
@@ -504,20 +510,38 @@ function GlbModel({ modelPath }) {
     totalBox.getSize(carSizeVec);
     const isXLong = carSizeVec.x > carSizeVec.z;
 
-    // Use TIRE meshes for positioning (most accurate — centered on hub)
-    const positionMeshes = tireMeshes.length >= 2 ? tireMeshes : detectedWheelMeshes;
-    let layout = detectWheelPositions(positionMeshes, totalBox);
+    // Check for manual wheel positions first (for combined-mesh models)
+    const modelName = modelPath.replace(/^.*\//, '').replace('.glb', '');
+    const manual = MANUAL_WHEEL_POS[modelName];
 
-    // If tire detection gave <4 groups, try ALL wheel meshes before fallback
-    if (layout.positions.length < 4 && positionMeshes !== detectedWheelMeshes && detectedWheelMeshes.length >= 4) {
-      layout = detectWheelPositions(detectedWheelMeshes, totalBox);
-    }
+    let layout;
+    let needsFallback = false;
 
-    // If still <4 groups, use fallback positions.
-    // hasWheels stays as-is: true = can hide originals, false = overlay only.
-    const needsFallback = layout.positions.length < 4;
-    if (needsFallback) {
-      layout = fallbackWheelLayout(center, carSizeVec, totalBox);
+    if (manual) {
+      // Use hardcoded positions (measured from GLB analysis)
+      layout = {
+        positions: [
+          { label: 'FL', position: new THREE.Vector3(...manual.fl), isRight: false },
+          { label: 'FR', position: new THREE.Vector3(...manual.fr), isRight: true },
+          { label: 'RL', position: new THREE.Vector3(...manual.rl), isRight: false },
+          { label: 'RR', position: new THREE.Vector3(...manual.rr), isRight: true },
+        ],
+        wheelRadius: manual.r,
+      };
+      if (manual.xlong) wheelData.current.isXLong = true;
+    } else {
+      // Auto-detect from tire meshes
+      const positionMeshes = tireMeshes.length >= 2 ? tireMeshes : detectedWheelMeshes;
+      layout = detectWheelPositions(positionMeshes, totalBox);
+
+      if (layout.positions.length < 4 && positionMeshes !== detectedWheelMeshes && detectedWheelMeshes.length >= 4) {
+        layout = detectWheelPositions(detectedWheelMeshes, totalBox);
+      }
+
+      needsFallback = layout.positions.length < 4;
+      if (needsFallback) {
+        layout = fallbackWheelLayout(center, carSizeVec, totalBox);
+      }
     }
 
     // If too many meshes detected as wheels (>30% of total), detection is broken.
