@@ -352,8 +352,10 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
         const s = targetDiam * carScale * normScale;
         const flip = isRight ? -1 : 1;
         const px = position.x * carScale;
-        const py = position.y * carScale + yOffset;
         const pz = position.z * carScale;
+        // Clamp Y so wheel bottom never goes below ground (Y=0)
+        const renderedRadius = targetDiam * carScale / 2;
+        const py = Math.max(position.y * carScale + yOffset, renderedRadius);
         // Always flip on X axis (axle is always baked to X)
         const sx = s * flip;
         const sz = s;
