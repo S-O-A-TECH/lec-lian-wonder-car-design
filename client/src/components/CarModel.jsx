@@ -143,29 +143,39 @@ function detectWheelPositions(wheelMeshes, carBox) {
   let usedSpreadFix = false;
 
   if (wSpread < widthSize * 0.1 && positions.length >= 2) {
-    // Combined L+R tire meshes: extract L/R positions from bounding box EDGES
-    // (min = left wheel center, max = right wheel center along width axis)
+    // Combined L+R tire meshes: extract L/R from bounding box edges,
+    // then offset inward by a fraction of the wheel thickness.
     const lengthVals = positions.map(p => p.position[lengthAxis]);
     const frontL = Math.max(...lengthVals);
     const rearL = Math.min(...lengthVals);
     const commonY = positions[0].position.y;
 
-    // Get actual L/R positions from tire mesh bounding box edges
-    // Each edge is where individual wheel center should be
+    // Get L/R edges from tire mesh bounding boxes
     let leftW = widthCenter, rightW = widthCenter;
     for (const info of infos) {
-      const minW = info.boxMin[widthAxis];
-      const maxW = info.boxMax[widthAxis];
-      // The tire radius in the width direction tells us how far inside
-      // the edge the center is. But for combined meshes, the edges ARE
-      // approximately at the individual wheel centers.
-      if (minW < leftW) leftW = minW;
-      if (maxW > rightW) rightW = maxW;
+      if (info.boxMin[widthAxis] < leftW) leftW = info.boxMin[widthAxis];
+      if (info.boxMax[widthAxis] > rightW) rightW = info.boxMax[widthAxis];
     }
-    // Offset inward by ~half tire width for center position
-    const tireHalfWidth = (infos[0] ? Math.min(infos[0].center.distanceTo(new THREE.Vector3(infos[0].boxMin.x, infos[0].center.y, infos[0].center.z)), Math.min(Math.abs(infos[0].boxMax[widthAxis] - infos[0].center[widthAxis]), Math.abs(infos[0].center[widthAxis] - infos[0].boxMin[widthAxis]))) : 0);
 
-    // Rebuild 4 clean positions
+    // Compute wheel thickness along width axis (the non-diameter dimension)
+    // For combined meshes, the width-axis size is the full L+R span,
+    // so we estimate single-wheel thickness from the diameter-axis size
+    const dims0 = infos[0] ? [
+      infos[0].boxMax.x - infos[0].boxMin.x,
+      infos[0].boxMax.y - infos[0].boxMin.y,
+      infos[0].boxMax.z - infos[0].boxMin.z,
+    ] : [0, 0, 0];
+    // The smallest dimension that's NOT the width axis is the wheel thickness
+    const widthIdx = widthAxis === 'x' ? 0 : 2;
+    const otherDims = dims0.filter((_, i) => i !== widthIdx);
+    const wheelThickness = Math.min(...otherDims);
+
+    // Offset inward: edges are at the OUTER edge of the tire,
+    // move inward by a portion of wheel thickness
+    const inwardOffset = wheelThickness * 0.55;
+    leftW += inwardOffset;
+    rightW -= inwardOffset;
+
     positions.length = 0;
     const makePos = (lbl, lengthV, widthV, right) => {
       const pos = new THREE.Vector3();
