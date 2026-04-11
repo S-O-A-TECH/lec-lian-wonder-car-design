@@ -134,22 +134,23 @@ function detectWheelPositions(wheelMeshes, carBox) {
   }
 
   // Fix: if left/right wheels are at the same position (combined tire meshes),
-  // spread them using car width
+  // spread them using car width. Mark as unreliable (won't hide originals).
   const widthAxis = isXLong ? 'z' : 'x';
   const widthCenter = isXLong ? carCenter.z : carCenter.x;
   const widthSize = isXLong ? carSize.z : carSize.x;
   const wValues = positions.map(p => p.position[widthAxis]);
   const wSpread = wValues.length > 1 ? Math.max(...wValues) - Math.min(...wValues) : 0;
+  let usedSpreadFix = false;
   if (wSpread < widthSize * 0.1) {
-    // Left/right not separated — apply track width from car dimensions
-    const halfTrack = widthSize * 0.40;
+    const halfTrack = widthSize * 0.35;
     for (const p of positions) {
       if (p.isRight) p.position[widthAxis] = widthCenter + halfTrack;
       else p.position[widthAxis] = widthCenter - halfTrack;
     }
+    usedSpreadFix = true;
   }
 
-  return { positions, wheelRadius: avgRadius };
+  return { positions, wheelRadius: avgRadius, usedSpreadFix };
 }
 
 function fallbackWheelLayout(carCenter, carSize, carBox) {
@@ -545,45 +546,35 @@ function GlbModel({ modelPath }) {
     wheelData.current.radius = finalRadius;
     wheelData.current.isXLong = isXLong;
 
-    // === VERIFICATION SYSTEM ===
-    // Record ORIGINAL wheel mesh centers per quadrant for comparison
-    // with custom wheel positions. Exposed via window for testing.
-    const origWheelCenters = {};
-    if (detectedWheelMeshes.length > 0) {
-      const groups = { FL: [], FR: [], RL: [], RR: [] };
-      for (const m of detectedWheelMeshes) {
-        const b = new THREE.Box3().setFromObject(m);
-        const c = new THREE.Vector3();
-        b.getCenter(c);
-        const isR = isXLong ? c.z > center.z : c.x > center.x;
-        const isF = isXLong ? c.x > center.x : c.z > center.z;
-        groups[(isF?'F':'R')+(isR?'R':'L')].push(c);
-      }
-      for (const [label, pts] of Object.entries(groups)) {
-        if (pts.length === 0) continue;
-        const avg = new THREE.Vector3();
-        pts.forEach(p => avg.add(p));
-        avg.divideScalar(pts.length);
-        origWheelCenters[label] = { x: avg.x, y: avg.y, z: avg.z };
-      }
-    }
-
-    // Compare: custom wheel positions vs original wheel centers
+    // === GRADING SYSTEM ===
+    // Honest diagnostics — no false "OK" judgments.
+    // The grading script checks: hasWheels, usedFallback, usedSpread, positions within car bounds.
     const mn = modelPath.replace(/^.*\//, '').replace('.glb', '');
-    const verification = layout.positions.map(p => {
-      const orig = origWheelCenters[p.label];
-      if (!orig) return p.label + ':NO_ORIG';
-      const dx = p.position.x - orig.x;
-      const dy = p.position.y - orig.y;
-      const dz = p.position.z - orig.z;
-      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-      return p.label + ':d=' + dist.toFixed(3) +
-        '(dx=' + dx.toFixed(3) + ',dy=' + dy.toFixed(3) + ',dz=' + dz.toFixed(3) + ')';
-    });
-    // Expose for external testing
-    window.__wheelVerify = { model: mn, origCenters: origWheelCenters,
-      customPositions: layout.positions.map(p => ({ label: p.label, x: p.position.x, y: p.position.y, z: p.position.z })),
-      radius: finalRadius, carHeight: carSizeVec.y };
+    const widthAxisG = isXLong ? 'z' : 'x';
+    const carHalfWidth = (isXLong ? carSizeVec.z : carSizeVec.x) / 2;
+    const carCenterW = isXLong ? center.z : center.x;
+
+    // Check if any custom position is OUTSIDE the car body bounds
+    const outsideCount = layout.positions.filter(p => {
+      const w = p.position[widthAxisG];
+      return Math.abs(w - carCenterW) > carHalfWidth;
+    }).length;
+
+    window.__wheelGrade = {
+      model: mn,
+      hasWheels: wheelData.current.hasWheels,
+      posCount: layout.positions.length,
+      wheelMeshes: detectedWheelMeshes.length,
+      tireMeshes: tireMeshes.length,
+      usedFallback: needsFallback,
+      usedSpread: layout.usedSpreadFix || false,
+      outsideBody: outsideCount,
+      radiusPct: Math.round(finalRadius / carSizeVec.y * 200),
+      positions: layout.positions.map(p => ({
+        label: p.label,
+        x: +p.position.x.toFixed(3), y: +p.position.y.toFixed(3), z: +p.position.z.toFixed(3),
+      })),
+    };
 
     // Restore scale/position so R3F rendering and CameraFitter work correctly
     clonedScene.scale.copy(savedScale);
