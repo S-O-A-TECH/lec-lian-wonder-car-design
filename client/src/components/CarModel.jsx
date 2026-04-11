@@ -15,9 +15,11 @@ const MANUAL_WHEEL_POS = {
   'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.14, hide:/Tyre_|Brake_|Wheel/i },
   'lamborghini-aventador': { fl:[-0.85,0.29,1.40], fr:[0.85,0.29,1.40], rl:[-0.85,0.29,-1.55], rr:[0.85,0.29,-1.55], r:0.28, hide:/Hubcap|Wheel_Screw|Brake_2|Brake_wire|Brake_disk|Tires/i },
   'bugatti-chiron':  { fl:[-1.11,0.40,1.49], fr:[1.11,0.40,1.49], rl:[-1.11,0.40,-1.54], rr:[1.11,0.40,-1.54], r:0.33, hide:/blur_rim|Brake|disc|hub|caliper|Tyre/i },
-  'land-rover-defender': { fl:[-0.82,0.39,1.54], fr:[0.80,0.39,1.54], rl:[-0.82,0.39,-1.32], rr:[0.80,0.39,-1.32], r:0.30, hide:/Tire_No_Sidewall|Brake_Disc|Brake_Hub|Rubber.*Black/i },
-  // range-rover, phantom, gls600: auto-detect works well (previously confirmed by user)
-  'bmw-i7': { fl:[-36.6,14.2,-80.0], fr:[61.1,14.2,-80.0], rl:[-36.6,14.2,-145.0], rr:[61.1,14.2,-145.0], r:13.0, hide:/sidewall|thread|shader_brake/i },
+  'land-rover-defender': { fl:[-0.82,0.39,1.54], fr:[0.80,0.39,1.54], rl:[-0.82,0.39,-1.32], rr:[0.80,0.39,-1.32], r:0.39, hide:/Tire_No_Sidewall|Brake_Disc|Brake_Hub|Rubber.*Black/i },
+  'land-rover-range-rover': { fl:[0.48,0.63,-1.70], fr:[3.88,0.63,-1.70], rl:[0.44,0.63,-7.65], rr:[3.92,0.63,-7.65], r:0.78, hide:/_Tires|_Rotors|_Callipers|_RotorsScrew/i },
+  'rolls-royce-phantom': { fl:[-0.31,-0.13,0.66], fr:[0.31,-0.15,0.66], rl:[-0.31,-0.13,-0.56], rr:[0.31,-0.13,-0.56], r:0.128, hide:/brake_shad|rim_shad|wheel_rubber/i },
+  'maybach-gls600': { fl:[-0.77,0.75,0.59], fr:[0.77,0.75,0.59], rl:[-0.78,0.75,-1.07], rr:[0.78,0.75,-1.07], r:0.39 },
+  'bmw-i7': { fl:[10,14,-35], fr:[78,14,-35], rl:[10,14,-172], rr:[78,14,-172], r:11.0, hide:/sidewall|thread|shader_brake/i },
 };
 
 // Detect if a mesh is part of a wheel assembly.
