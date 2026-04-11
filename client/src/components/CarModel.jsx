@@ -134,19 +134,36 @@ function detectWheelPositions(wheelMeshes, carBox) {
   }
 
   // Fix: if left/right wheels are at the same position (combined tire meshes),
-  // spread them using car width. Mark as unreliable (won't hide originals).
+  // rebuild 4 clean positions deterministically from front/rear + car width.
   const widthAxis = isXLong ? 'z' : 'x';
+  const lengthAxis = isXLong ? 'x' : 'z';
   const widthCenter = isXLong ? carCenter.z : carCenter.x;
   const widthSize = isXLong ? carSize.z : carSize.x;
   const wValues = positions.map(p => p.position[widthAxis]);
   const wSpread = wValues.length > 1 ? Math.max(...wValues) - Math.min(...wValues) : 0;
   let usedSpreadFix = false;
-  if (wSpread < widthSize * 0.1) {
+
+  if (wSpread < widthSize * 0.1 && positions.length >= 2) {
+    // Get front/rear length values (sorted)
+    const lengthVals = positions.map(p => p.position[lengthAxis]);
+    const frontL = Math.max(...lengthVals);
+    const rearL = Math.min(...lengthVals);
+    const commonY = positions[0].position.y;
     const halfTrack = widthSize * 0.30;
-    for (const p of positions) {
-      if (p.isRight) p.position[widthAxis] = widthCenter + halfTrack;
-      else p.position[widthAxis] = widthCenter - halfTrack;
-    }
+
+    // Rebuild 4 clean positions
+    positions.length = 0;
+    const makePos = (lbl, lengthV, widthV, right) => {
+      const pos = new THREE.Vector3();
+      pos[lengthAxis] = lengthV;
+      pos[widthAxis] = widthV;
+      pos.y = commonY;
+      return { label: lbl, position: pos, isRight: right };
+    };
+    positions.push(makePos('FL', frontL, widthCenter - halfTrack, false));
+    positions.push(makePos('FR', frontL, widthCenter + halfTrack, true));
+    positions.push(makePos('RL', rearL, widthCenter - halfTrack, false));
+    positions.push(makePos('RR', rearL, widthCenter + halfTrack, true));
     usedSpreadFix = true;
   }
 
