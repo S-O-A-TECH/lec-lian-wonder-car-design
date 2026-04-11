@@ -10,11 +10,11 @@ const TARGET_SIZE = 4.5;
 // Manual wheel positions for models with combined L+R tire meshes.
 // These cannot be auto-detected; positions measured from GLB analysis.
 const MANUAL_WHEEL_POS = {
-  'porsche-911':     { fl:[-0.75,-0.30,1.27], fr:[0.75,-0.30,1.27], rl:[-0.75,-0.30,-1.17], rr:[0.75,-0.30,-1.17], r:0.33 },
-  'mclaren-720s':    { fl:[0.98,0.23,-0.50], fr:[0.98,0.23,0.50], rl:[-0.82,0.22,-0.50], rr:[-0.82,0.22,0.50], r:0.22, xlong:true },
-  'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.15 },
-  'lamborghini-aventador': { fl:[-0.85,0.35,1.30], fr:[0.85,0.35,1.30], rl:[-0.85,0.35,-1.50], rr:[0.85,0.35,-1.50], r:0.35 },
-  'bugatti-chiron':  { fl:[-0.85,0.39,1.40], fr:[0.85,0.39,1.40], rl:[-0.85,0.39,-1.30], rr:[0.85,0.39,-1.30], r:0.40 },
+  'porsche-911':     { fl:[-0.75,-0.30,1.27], fr:[0.75,-0.30,1.27], rl:[-0.75,-0.30,-1.17], rr:[0.75,-0.30,-1.17], r:0.33, hide:/^Cylinder/i },
+  'mclaren-720s':    { fl:[0.98,0.23,-0.50], fr:[0.98,0.23,0.50], rl:[-0.82,0.22,-0.50], rr:[-0.82,0.22,0.50], r:0.22, xlong:true, hide:/tyres|rims|brake_dic/i },
+  'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.15, hide:/Tyre_|Brake_|Wheel/i },
+  'lamborghini-aventador': { fl:[-0.85,0.35,1.30], fr:[0.85,0.35,1.30], rl:[-0.85,0.35,-1.50], rr:[0.85,0.35,-1.50], r:0.35, hide:/Tire|Hubcap|Brake|Wheel_Screw/i },
+  'bugatti-chiron':  { fl:[-0.85,0.39,1.40], fr:[0.85,0.39,1.40], rl:[-0.85,0.39,-1.30], rr:[0.85,0.39,-1.30], r:0.40, hide:/Tyre|Brake|rim|disc|hub|caliper/i },
   'bugatti-veyron':  { fl:[-0.80,0.35,1.20], fr:[0.80,0.35,1.20], rl:[-0.80,0.35,-1.20], rr:[0.80,0.35,-1.20], r:0.35 },
 };
 
@@ -529,6 +529,22 @@ function GlbModel({ modelPath }) {
         wheelRadius: manual.r,
       };
       if (manual.xlong) wheelData.current.isXLong = true;
+      // Mark meshes matching hide pattern as wheel parts (for hiding originals)
+      if (manual.hide) {
+        clonedScene.traverse((child) => {
+          if (!child.isMesh) return;
+          const meshName = child.name || '';
+          const matName = child.material?.name || '';
+          if (manual.hide.test(meshName) || manual.hide.test(matName)) {
+            const orig = originals.current.get(child.uuid);
+            if (orig) {
+              orig.isWheel = true;
+              detectedWheelMeshes.push(child);
+            }
+          }
+        });
+        wheelData.current.hasWheels = detectedWheelMeshes.length > 0;
+      }
     } else {
       // Auto-detect from tire meshes
       const positionMeshes = tireMeshes.length >= 2 ? tireMeshes : detectedWheelMeshes;
