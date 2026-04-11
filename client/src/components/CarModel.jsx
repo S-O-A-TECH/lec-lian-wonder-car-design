@@ -142,7 +142,7 @@ function detectWheelPositions(wheelMeshes, carBox) {
   const wSpread = wValues.length > 1 ? Math.max(...wValues) - Math.min(...wValues) : 0;
   let usedSpreadFix = false;
   if (wSpread < widthSize * 0.1) {
-    const halfTrack = widthSize * 0.35;
+    const halfTrack = widthSize * 0.30;
     for (const p of positions) {
       if (p.isRight) p.position[widthAxis] = widthCenter + halfTrack;
       else p.position[widthAxis] = widthCenter - halfTrack;
@@ -354,14 +354,16 @@ function WheelSet({ wheelPath, positions, carScale, yOffset, wheelRadius, isXLon
         const flip = isRight ? -1 : 1;
         const px = position.x * carScale;
         const pz = position.z * carScale;
-        // Clamp Y so wheel bottom never goes below ground (Y=0)
         const renderedRadius = targetDiam * carScale / 2;
         const py = Math.max(position.y * carScale + yOffset, renderedRadius);
-        // Always flip on X axis (axle is always baked to X)
-        const sx = s * flip;
-        const sz = s;
+        // For X-long cars: rotate wheel 90° around Y so axle faces Z (car width)
+        // For Z-long cars: axle stays X (no rotation needed)
+        const wheelRotation = isXLong ? [0, Math.PI / 2, 0] : [0, 0, 0];
+        // Flip on axle axis: X for Z-long, Z for X-long
+        const sx = isXLong ? s : s * flip;
+        const sz = isXLong ? s * flip : s;
         return (
-          <group key={label} position={[px, py, pz]} scale={[sx, s, sz]}>
+          <group key={label} position={[px, py, pz]} scale={[sx, s, sz]} rotation={wheelRotation}>
             {bakedMeshes.map((bm, mi) => (
               <mesh key={mi} geometry={bm.geometry} material={wheelMat} />
             ))}
