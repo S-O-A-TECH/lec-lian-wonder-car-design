@@ -15,7 +15,10 @@ const MANUAL_WHEEL_POS = {
   'mclaren-p1':      { fl:[0.36,0.14,0.53], fr:[-0.36,0.14,0.53], rl:[0.35,0.15,-0.65], rr:[-0.35,0.15,-0.65], r:0.14, hide:/Tyre_|Brake_|Wheel/i },
   // aventador: combined full-car tire meshes, wheel replacement not supported
   'bugatti-chiron':  { fl:[-1.11,0.40,1.49], fr:[1.11,0.40,1.49], rl:[-1.11,0.40,-1.54], rr:[1.11,0.40,-1.54], r:0.33, hide:/blur_rim|Brake|disc|hub|caliper|Tyre/i },
-  // veyron & i7: replaced with new Sketchfab models, use auto-detect
+  'land-rover-defender': { fl:[-0.82,0.39,1.54], fr:[0.80,0.39,1.54], rl:[-0.82,0.39,-1.32], rr:[0.80,0.39,-1.32], r:0.30, hide:/Tire|Brake|Hub|Rubber/i },
+  'land-rover-range-rover': { fl:[0.40,1.65,-4.25], fr:[3.96,1.65,-4.25], rl:[0.43,1.70,-6.49], rr:[3.93,1.70,-6.49], r:0.93, hide:/2023_Land_Rover/i },
+  'rolls-royce-phantom': { fl:[-0.29,0.03,0.15], fr:[0.29,0.03,0.15], rl:[-0.33,-0.04,-0.22], rr:[0.33,-0.04,-0.22], r:0.13, hide:/brake|rim|wheel_rubber|ext_chrome/i },
+  'maybach-gls600': { fl:[-0.77,0.94,0.29], fr:[0.77,0.94,0.29], rl:[-0.78,0.95,-0.77], rr:[0.78,0.95,-0.77], r:0.49, hide:/gls_paint\.02[0-9]|gls_rim|gls_brake|gls_tire/i },
 };
 
 // Detect if a mesh is part of a wheel assembly.
